@@ -1,0 +1,9 @@
+streamlit
+PyMuPDF
+Pillow
+numpy
+opencv-python-headless
+openpyxl
+google-cloud-vision
+google-api-python-client
+google-auth
