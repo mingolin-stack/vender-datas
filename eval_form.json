@@ -1,0 +1,71 @@
+{
+  "form_name": "供應商評核表_GH_CPP_404_掃描版",
+  "calibration_dpi": 200,
+  "page_size_px": { "width": 1654, "height": 2339 },
+  "fields": [
+    { "name": "供應商名稱", "type": "text", "page": 1, "box": [158, 296, 373, 374] },
+    {
+      "name": "評核類別",
+      "type": "checkbox_group",
+      "options": [
+        { "label": "初次評核", "page": 1, "box": [1063, 296, 1110, 374] },
+        { "label": "定期評核", "page": 1, "box": [1275, 296, 1322, 374] }
+      ]
+    },
+    { "name": "採購項目", "type": "text", "page": 1, "box": [158, 374, 1493, 510] },
+    { "name": "評核單位", "type": "text", "page": 1, "box": [158, 510, 747, 589] },
+    { "name": "評核人員", "type": "text", "page": 1, "box": [924, 510, 1121, 589] },
+    { "name": "評核日期", "type": "text", "page": 1, "box": [1299, 510, 1493, 589] },
+
+    { "name": "a1_評分", "type": "text", "page": 1, "box": [905, 842, 1023, 943] },
+    { "name": "a1_說明", "type": "text", "page": 1, "box": [1023, 842, 1397, 943], "required": false },
+    { "name": "a1_得分", "type": "text", "page": 1, "box": [1397, 842, 1495, 943], "required": false },
+
+    { "name": "a2_評分", "type": "text", "page": 1, "box": [905, 943, 1023, 1044] },
+    { "name": "a2_說明", "type": "text", "page": 1, "box": [1023, 943, 1397, 1044], "required": false },
+    { "name": "a2_得分", "type": "text", "page": 1, "box": [1397, 943, 1495, 1044], "required": false },
+
+    { "name": "b1_評分", "type": "text", "page": 1, "box": [905, 1044, 1023, 1196] },
+    { "name": "b1_說明", "type": "text", "page": 1, "box": [1023, 1044, 1397, 1196], "required": false },
+    { "name": "b1_得分", "type": "text", "page": 1, "box": [1397, 1044, 1495, 1196], "required": false },
+
+    { "name": "b2_評分", "type": "text", "page": 1, "box": [905, 1196, 1023, 1347] },
+    { "name": "b2_說明", "type": "text", "page": 1, "box": [1023, 1196, 1397, 1347], "required": false },
+    { "name": "b2_得分", "type": "text", "page": 1, "box": [1397, 1196, 1495, 1347], "required": false },
+
+    { "name": "c1_評分", "type": "text", "page": 1, "box": [905, 1347, 1023, 1449] },
+    { "name": "c1_說明", "type": "text", "page": 1, "box": [1023, 1347, 1397, 1449], "required": false },
+    { "name": "c1_得分", "type": "text", "page": 1, "box": [1397, 1347, 1495, 1449], "required": false },
+
+    { "name": "c2_評分", "type": "text", "page": 1, "box": [905, 1449, 1023, 1550] },
+    { "name": "c2_說明", "type": "text", "page": 1, "box": [1023, 1449, 1397, 1550], "required": false },
+    { "name": "c2_得分", "type": "text", "page": 1, "box": [1397, 1449, 1495, 1550], "required": false },
+
+    { "name": "c3_評分", "type": "text", "page": 1, "box": [905, 1550, 1023, 1651] },
+    { "name": "c3_說明", "type": "text", "page": 1, "box": [1023, 1550, 1397, 1651], "required": false },
+    { "name": "c3_得分", "type": "text", "page": 1, "box": [1397, 1550, 1495, 1651], "required": false },
+
+    { "name": "d1_評分", "type": "text", "page": 1, "box": [905, 1651, 1023, 1803] },
+    { "name": "d1_說明", "type": "text", "page": 1, "box": [1023, 1651, 1397, 1803], "required": false },
+    { "name": "d1_得分", "type": "text", "page": 1, "box": [1397, 1651, 1495, 1803], "required": false },
+
+    { "name": "d2_評分", "type": "text", "page": 1, "box": [905, 1803, 1023, 1954] },
+    { "name": "d2_說明", "type": "text", "page": 1, "box": [1023, 1803, 1397, 1954], "required": false },
+    { "name": "d2_得分", "type": "text", "page": 1, "box": [1397, 1803, 1495, 1954], "required": false },
+
+    { "name": "d3_評分", "type": "text", "page": 1, "box": [905, 1954, 1023, 2106] },
+    { "name": "d3_說明", "type": "text", "page": 1, "box": [1023, 1954, 1397, 2106], "required": false },
+    { "name": "d3_得分", "type": "text", "page": 1, "box": [1397, 1954, 1495, 2106], "required": false },
+
+    { "name": "e1_是否符合", "type": "text", "page": 2, "box": [807, 398, 905, 550], "required": false },
+    { "name": "e1_說明", "type": "text", "page": 2, "box": [905, 398, 1397, 550], "required": false },
+    { "name": "e1_加分", "type": "text", "page": 2, "box": [1397, 398, 1495, 550], "required": false },
+
+    { "name": "e2_是否符合", "type": "text", "page": 2, "box": [807, 550, 905, 668], "required": false },
+    { "name": "e2_說明", "type": "text", "page": 2, "box": [905, 550, 1397, 668], "required": false },
+    { "name": "e2_加分", "type": "text", "page": 2, "box": [1397, 550, 1495, 668], "required": false },
+
+    { "name": "評核總分", "type": "text", "page": 2, "box": [60, 771, 331, 1122] },
+    { "name": "評核等級", "type": "text", "page": 2, "box": [331, 771, 504, 1122] }
+  ]
+}
