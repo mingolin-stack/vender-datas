@@ -1,0 +1,668 @@
+{
+  "form_name": "供應商評核表_GH_CPP_404_掃描版_v3",
+  "calibration_dpi": 200,
+  "calibration_source": "用真實掃描填寫檔(汎嘉工程)重新校正；並加入 zones 讓程式在每一頁實際掃描圖上動態微調，因應不同頁面掃描位置的些微差異",
+  "page_size_px": {
+    "width": 1653,
+    "height": 2339
+  },
+  "zones": {
+    "header_info": {
+      "page": 1,
+      "anchor_left": 163,
+      "anchor_top": 316,
+      "anchor_right": 1473,
+      "anchor_bottom": 614,
+      "y_search": 35,
+      "x_search": 30
+    },
+    "scoring_table": {
+      "type": "rows",
+      "page": 1,
+      "anchor_left": 164,
+      "anchor_right": 1477,
+      "row_boundaries": [
+        766,
+        868,
+        969,
+        1071,
+        1171,
+        1273,
+        1374,
+        1476,
+        1578,
+        1680,
+        1777,
+        1884
+      ],
+      "y_search_first": 60,
+      "y_search_step": 30,
+      "x_search": 30
+    },
+    "bonus_table": {
+      "page": 2,
+      "anchor_left": 175,
+      "anchor_top": 314,
+      "anchor_right": 1480,
+      "anchor_bottom": 655,
+      "y_search": 50,
+      "x_search": 30
+    },
+    "summary": {
+      "page": 2,
+      "anchor_left": 171,
+      "anchor_top": 757,
+      "anchor_right": 1477,
+      "anchor_bottom": 992,
+      "y_search": 30,
+      "x_search": 30
+    },
+    "signature": {
+      "page": 2,
+      "anchor_left": 60,
+      "anchor_top": 1005,
+      "anchor_right": 1550,
+      "anchor_bottom": 1095,
+      "y_search": 30,
+      "x_search": 30
+    }
+  },
+  "fields": [
+    {
+      "name": "供應商名稱",
+      "type": "text",
+      "page": 1,
+      "zone": "header_info",
+      "box": [
+        376,
+        316,
+        893,
+        396
+      ]
+    },
+    {
+      "name": "評核類別",
+      "type": "checkbox_group",
+      "options": [
+        {
+          "label": "初次評核",
+          "page": 1,
+          "zone": "header_info",
+          "box": [
+            1053,
+            316,
+            1100,
+            396
+          ]
+        },
+        {
+          "label": "定期評核",
+          "page": 1,
+          "zone": "header_info",
+          "box": [
+            1262,
+            316,
+            1308,
+            396
+          ]
+        }
+      ]
+    },
+    {
+      "name": "採購項目",
+      "type": "text",
+      "page": 1,
+      "zone": "header_info",
+      "box": [
+        376,
+        396,
+        1473,
+        534
+      ]
+    },
+    {
+      "name": "評核單位",
+      "type": "text",
+      "page": 1,
+      "zone": "header_info",
+      "box": [
+        377,
+        534,
+        687,
+        614
+      ]
+    },
+    {
+      "name": "評核人員",
+      "type": "text",
+      "page": 1,
+      "zone": "header_info",
+      "box": [
+        882,
+        534,
+        1112,
+        614
+      ]
+    },
+    {
+      "name": "評核日期",
+      "type": "text",
+      "page": 1,
+      "zone": "header_info",
+      "box": [
+        1286,
+        534,
+        1473,
+        614
+      ]
+    },
+    {
+      "name": "a1_評分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        904,
+        868,
+        1018,
+        969
+      ]
+    },
+    {
+      "name": "a1_說明",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1018,
+        868,
+        1383,
+        969
+      ],
+      "required": false
+    },
+    {
+      "name": "a1_得分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1383,
+        868,
+        1477,
+        969
+      ],
+      "required": false
+    },
+    {
+      "name": "a2_評分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        904,
+        969,
+        1018,
+        1071
+      ]
+    },
+    {
+      "name": "a2_說明",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1018,
+        969,
+        1383,
+        1071
+      ],
+      "required": false
+    },
+    {
+      "name": "a2_得分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1383,
+        969,
+        1477,
+        1071
+      ],
+      "required": false
+    },
+    {
+      "name": "b1_評分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        904,
+        1071,
+        1018,
+        1171
+      ]
+    },
+    {
+      "name": "b1_說明",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1018,
+        1071,
+        1383,
+        1171
+      ],
+      "required": false
+    },
+    {
+      "name": "b1_得分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1383,
+        1071,
+        1477,
+        1171
+      ],
+      "required": false
+    },
+    {
+      "name": "b2_評分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        904,
+        1171,
+        1018,
+        1273
+      ]
+    },
+    {
+      "name": "b2_說明",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1018,
+        1171,
+        1383,
+        1273
+      ],
+      "required": false
+    },
+    {
+      "name": "b2_得分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1383,
+        1171,
+        1477,
+        1273
+      ],
+      "required": false
+    },
+    {
+      "name": "c1_評分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        904,
+        1273,
+        1018,
+        1374
+      ]
+    },
+    {
+      "name": "c1_說明",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1018,
+        1273,
+        1383,
+        1374
+      ],
+      "required": false
+    },
+    {
+      "name": "c1_得分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1383,
+        1273,
+        1477,
+        1374
+      ],
+      "required": false
+    },
+    {
+      "name": "c2_評分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        904,
+        1374,
+        1018,
+        1476
+      ]
+    },
+    {
+      "name": "c2_說明",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1018,
+        1374,
+        1383,
+        1476
+      ],
+      "required": false
+    },
+    {
+      "name": "c2_得分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1383,
+        1374,
+        1477,
+        1476
+      ],
+      "required": false
+    },
+    {
+      "name": "c3_評分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        904,
+        1476,
+        1018,
+        1578
+      ]
+    },
+    {
+      "name": "c3_說明",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1018,
+        1476,
+        1383,
+        1578
+      ],
+      "required": false
+    },
+    {
+      "name": "c3_得分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1383,
+        1476,
+        1477,
+        1578
+      ],
+      "required": false
+    },
+    {
+      "name": "d1_評分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        904,
+        1578,
+        1018,
+        1680
+      ]
+    },
+    {
+      "name": "d1_說明",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1018,
+        1578,
+        1383,
+        1680
+      ],
+      "required": false
+    },
+    {
+      "name": "d1_得分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1383,
+        1578,
+        1477,
+        1680
+      ],
+      "required": false
+    },
+    {
+      "name": "d2_評分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        904,
+        1680,
+        1018,
+        1777
+      ]
+    },
+    {
+      "name": "d2_說明",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1018,
+        1680,
+        1383,
+        1777
+      ],
+      "required": false
+    },
+    {
+      "name": "d2_得分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1383,
+        1680,
+        1477,
+        1777
+      ],
+      "required": false
+    },
+    {
+      "name": "d3_評分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        904,
+        1777,
+        1018,
+        1884
+      ]
+    },
+    {
+      "name": "d3_說明",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1018,
+        1777,
+        1383,
+        1884
+      ],
+      "required": false
+    },
+    {
+      "name": "d3_得分",
+      "type": "text",
+      "page": 1,
+      "zone": "scoring_table",
+      "box": [
+        1383,
+        1777,
+        1477,
+        1884
+      ],
+      "required": false
+    },
+    {
+      "name": "e1_是否符合",
+      "type": "text",
+      "page": 2,
+      "zone": "bonus_table",
+      "box": [
+        829,
+        416,
+        927,
+        535
+      ],
+      "required": false
+    },
+    {
+      "name": "e1_說明",
+      "type": "text",
+      "page": 2,
+      "zone": "bonus_table",
+      "box": [
+        927,
+        416,
+        1386,
+        535
+      ],
+      "required": false
+    },
+    {
+      "name": "e1_加分",
+      "type": "text",
+      "page": 2,
+      "zone": "bonus_table",
+      "box": [
+        1386,
+        416,
+        1480,
+        535
+      ],
+      "required": false
+    },
+    {
+      "name": "e2_是否符合",
+      "type": "text",
+      "page": 2,
+      "zone": "bonus_table",
+      "box": [
+        828,
+        535,
+        926,
+        655
+      ],
+      "required": false
+    },
+    {
+      "name": "e2_說明",
+      "type": "text",
+      "page": 2,
+      "zone": "bonus_table",
+      "box": [
+        926,
+        535,
+        1385,
+        655
+      ],
+      "required": false
+    },
+    {
+      "name": "e2_加分",
+      "type": "text",
+      "page": 2,
+      "zone": "bonus_table",
+      "box": [
+        1385,
+        535,
+        1479,
+        655
+      ],
+      "required": false
+    },
+    {
+      "name": "評核總分",
+      "type": "text",
+      "page": 2,
+      "zone": "summary",
+      "box": [
+        171,
+        757,
+        340,
+        992
+      ]
+    },
+    {
+      "name": "評核等級",
+      "type": "text",
+      "page": 2,
+      "zone": "summary",
+      "box": [
+        340,
+        757,
+        509,
+        992
+      ]
+    },
+    {
+      "name": "審核主管",
+      "type": "text",
+      "page": 2,
+      "zone": "signature",
+      "box": [
+        60,
+        1010,
+        750,
+        1090
+      ],
+      "required": false
+    },
+    {
+      "name": "評核人員(簽名)",
+      "type": "text",
+      "page": 2,
+      "zone": "signature",
+      "box": [
+        750,
+        1010,
+        1550,
+        1090
+      ],
+      "required": false
+    }
+  ]
+}
