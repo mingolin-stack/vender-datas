@@ -1,0 +1,487 @@
+{
+  "form_name": "供應商資料表_GreenHarvest",
+  "calibration_dpi": 200,
+  "page_size_px": {
+    "width": 1653,
+    "height": 2339
+  },
+  "notes": "座標是在 200 DPI 下用實際掃描範例校正出來的。若貴公司掃描機的解析度設定不同(例如150或300 DPI)，需要等比例換算，或統一約定所有掃描都用200 DPI。",
+  "fields": [
+    {
+      "name": "公司全名(中文)",
+      "type": "text",
+      "box": [
+        481,
+        296,
+        1115,
+        376
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "公司全名(英文)",
+      "type": "text",
+      "box": [
+        481,
+        376,
+        1115,
+        452
+      ],
+      "required": false,
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "統一編號/身份證號",
+      "type": "text",
+      "box": [
+        1115,
+        376,
+        1468,
+        452
+      ],
+      "page": 1,
+      "zone": "main_table",
+      "column_refine": true
+    },
+    {
+      "name": "服務範疇",
+      "type": "text",
+      "box": [
+        358,
+        452,
+        1468,
+        598
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "核准設立日期(年/月/日)",
+      "type": "text",
+      "box": [
+        358,
+        598,
+        777,
+        700
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "資本額(單位:萬元)",
+      "type": "text",
+      "box": [
+        1001,
+        598,
+        1467,
+        700
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "聯絡地址",
+      "type": "text",
+      "box": [
+        357,
+        700,
+        1467,
+        780
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "帳單地址",
+      "type": "text",
+      "box": [
+        357,
+        780,
+        1467,
+        860
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "負責人",
+      "type": "text",
+      "box": [
+        357,
+        860,
+        776,
+        941
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "公司電話",
+      "type": "text",
+      "box": [
+        1000,
+        860,
+        1467,
+        941
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "聯絡人",
+      "type": "text",
+      "box": [
+        357,
+        941,
+        776,
+        1023
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "連絡電話",
+      "type": "text",
+      "box": [
+        1000,
+        941,
+        1467,
+        1023
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "匯款帳戶戶名",
+      "type": "text",
+      "box": [
+        357,
+        1023,
+        1466,
+        1105
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "匯款銀行",
+      "type": "text",
+      "box": [
+        357,
+        1105,
+        776,
+        1187
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "分行別",
+      "type": "text",
+      "box": [
+        1000,
+        1105,
+        1466,
+        1187
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "匯款帳號",
+      "type": "text",
+      "box": [
+        357,
+        1187,
+        1466,
+        1269
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "發票類型",
+      "type": "checkbox_group",
+      "options": [
+        {
+          "label": "二聯式",
+          "box": [
+            146,
+            1323,
+            261,
+            1375
+          ],
+          "page": 1,
+          "zone": "main_table"
+        },
+        {
+          "label": "三聯式",
+          "box": [
+            146,
+            1375,
+            261,
+            1426
+          ],
+          "page": 1,
+          "zone": "main_table"
+        },
+        {
+          "label": "二聯收銀機發票",
+          "box": [
+            146,
+            1426,
+            261,
+            1477
+          ],
+          "page": 1,
+          "zone": "main_table"
+        },
+        {
+          "label": "三聯收銀機發票",
+          "box": [
+            146,
+            1477,
+            261,
+            1531
+          ],
+          "page": 1,
+          "zone": "main_table"
+        },
+        {
+          "label": "電子發票",
+          "box": [
+            566,
+            1323,
+            681,
+            1375
+          ],
+          "page": 1,
+          "zone": "main_table"
+        },
+        {
+          "label": "免用統一發票",
+          "box": [
+            566,
+            1375,
+            681,
+            1426
+          ],
+          "page": 1,
+          "zone": "main_table"
+        }
+      ],
+      "page": 1
+    },
+    {
+      "name": "課稅別",
+      "type": "checkbox_group",
+      "options": [
+        {
+          "label": "應稅內含",
+          "box": [
+            1029,
+            1323,
+            1141,
+            1375
+          ],
+          "page": 1,
+          "zone": "main_table"
+        },
+        {
+          "label": "應稅外加",
+          "box": [
+            1029,
+            1375,
+            1141,
+            1426
+          ],
+          "page": 1,
+          "zone": "main_table"
+        },
+        {
+          "label": "零稅率",
+          "box": [
+            1029,
+            1426,
+            1141,
+            1477
+          ],
+          "page": 1,
+          "zone": "main_table"
+        },
+        {
+          "label": "免稅",
+          "box": [
+            1029,
+            1477,
+            1141,
+            1531
+          ],
+          "page": 1,
+          "zone": "main_table"
+        }
+      ],
+      "page": 1
+    },
+    {
+      "name": "附件1_設立證明文件或身分證明文件_提供狀況",
+      "type": "checkbox_single",
+      "box": [
+        1029,
+        1531,
+        1466,
+        1586
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "附件2_銀行存摺封面影本_提供狀況",
+      "type": "checkbox_single",
+      "box": [
+        1029,
+        1586,
+        1466,
+        1636
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "附件3_聯絡人名片_提供狀況",
+      "type": "checkbox_single",
+      "box": [
+        1029,
+        1636,
+        1466,
+        1688
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "附件4_供應商誠信廉潔暨保密承諾書_提供狀況",
+      "type": "checkbox_single",
+      "box": [
+        1029,
+        1688,
+        1466,
+        1739
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "附件5_其他文件_提供狀況",
+      "type": "checkbox_single",
+      "box": [
+        1029,
+        1739,
+        1466,
+        1793
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "填表人",
+      "type": "text",
+      "box": [
+        320,
+        1793,
+        856,
+        1900
+      ],
+      "page": 1,
+      "zone": "main_table"
+    },
+    {
+      "name": "填表日期",
+      "type": "text",
+      "box": [
+        1029,
+        1793,
+        1466,
+        1900
+      ],
+      "page": 1,
+      "zone": "main_table"
+    }
+  ],
+  "zones": {
+    "main_table": {
+      "type": "rows",
+      "page": 1,
+      "anchor_left": 147,
+      "anchor_right": 1467,
+      "row_boundaries": [
+        296,
+        376,
+        452,
+        598,
+        700,
+        780,
+        860,
+        941,
+        1023,
+        1105,
+        1187,
+        1269,
+        1323,
+        1375,
+        1426,
+        1477,
+        1531,
+        1586,
+        1636,
+        1688,
+        1739,
+        1793,
+        1900
+      ],
+      "y_search_first": 100,
+      "x_search": 30,
+      "row_search_radii": [
+        30,
+        30,
+        [
+          120,
+          450
+        ],
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        [
+          30,
+          250
+        ],
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30
+      ],
+      "content_check_x_range": [
+        481,
+        1113
+      ],
+      "ocr_anchors": {
+        "296": "中文",
+        "376": "英文",
+        "452": "服務範疇"
+      }
+    }
+  }
+}
