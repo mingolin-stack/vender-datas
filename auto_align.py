@@ -407,30 +407,36 @@ def ocr_labels_to_line_seed(pil_image, zone, label_tops, max_up=120):
     """
     把 OCR 找到的「印刷標籤文字頂端 y 座標」換算成「這一列上方格線」的實際 y 座標。
 
-    舊寫法直接把標籤文字頂端當成格線位置，但標籤是印在格子「裡面」的，
-    文字頂端比上方格線低 20~70 像素(服務範疇這種高的格子差最多)。一旦差距超過
-    後續逐列搜尋的範圍(±30)，之後每一列都找不到格線、只能沿用推算值，
-    整張表就固定往下偏，裁到下一列(例如聯絡人裁到匯款戶名)。
+    標籤是印在格子「裡面」的，文字頂端比上方格線低 20~70 像素，不能直接當格線用。
+    做法：從標籤頂端往上找「最靠近的那條橫線」，那就是這一列的上框線。
+    只看填寫欄位那一段(content_check_x_range)的橫線，避免被左邊合併儲存格的框線干擾。
 
-    新寫法：從標籤頂端往上找「最靠近的那條橫線」，那就是這一列的上框線。
-    只看填寫欄位那一段(content_check_x_range)的橫線，避免被左邊合併儲存格
-    (例如「公司全名」跨兩列)的框線干擾。往上找不到線的標籤就不採用，
-    讓那一條退回原本的格線偵測。
+    ocr_anchors 的標籤可以用「|」寫多個候選(例如 "聯絡地址|營登地址")，
+    因為有些供應商自己改過標籤文字，找到哪個就用哪個。
+
+    防呆：同一個字可能在頁面其他地方也出現(例如「聯絡人」也出現在附件的「聯絡人名片」)，
+    所以每個錨點都要落在「上一個錨點 + 模板列高」附近才採用(往上最多 40px，往下最多 300px，
+    往下放寬是因為內容多的欄位會把列撐高)，否則捨棄、讓那一條退回格線偵測。
     """
     binary = _binary(np.array(pil_image.convert("L")))
     xr = zone.get("content_check_x_range") or [zone["anchor_left"], zone["anchor_right"]]
     x_range = (int(xr[0]), int(xr[1]))
     seed = {}
-    for template_y, label_text in sorted(zone.get("ocr_anchors", {}).items(), key=lambda kv: int(kv[0])):
-        if label_text not in label_tops:
+    prev_t = prev_y = None
+    for template_y, label_spec in sorted(zone.get("ocr_anchors", {}).items(), key=lambda kv: int(kv[0])):
+        ty = int(template_y)
+        top = next((label_tops[c] for c in str(label_spec).split("|") if c in label_tops), None)
+        if top is None:
             continue
-        top = int(label_tops[label_text])
-        y = _nearest_line_above(binary, x_range, top, max_up)
-        if y is None:         # 範圍內沒有任何橫線 -> 不採用
+        y = _nearest_line_above(binary, x_range, int(top), max_up)
+        if y is None:
             continue
-        if seed and y <= max(seed.values()):   # 順序錯亂(OCR 找錯標籤)就不採用
-            continue
-        seed[int(template_y)] = y
+        if prev_y is not None:
+            expected = prev_y + (ty - prev_t)
+            if y <= prev_y or y < expected - 40 or y > expected + 300:
+                continue
+        seed[ty] = y
+        prev_t, prev_y = ty, y
     return seed
 
 

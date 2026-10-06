@@ -29,6 +29,7 @@
 ------------------------------------------------
 """
 
+import hashlib
 import json
 from io import BytesIO
 
@@ -44,6 +45,7 @@ from auto_align import compute_zone_transform, remap_box, compute_row_sequence, 
 
 st.set_page_config(page_title="供應商資料表 PDF 辨識工具", page_icon="🧾", layout="wide")
 
+APP_VERSION = "2026-10-06-v12"
 RENDER_DPI = 200  # 必須跟 templates/*.json 校正時使用的 DPI 一致
 
 
@@ -135,7 +137,8 @@ def compute_ocr_y_seed(vision_client, page_img, zone):
     if not ocr_anchors or not vision_client:
         return {}
     try:
-        label_boxes = find_label_boxes(vision_client, page_img, list(ocr_anchors.values()))
+        targets = sorted({c for spec in ocr_anchors.values() for c in str(spec).split("|")})
+        label_boxes = find_label_boxes(vision_client, page_img, targets)
     except Exception as e:
         st.warning(f"OCR 標籤定位失敗，退回原本的格線校正方式：{e}")
         return {}
@@ -242,7 +245,7 @@ def run_extraction(page_images, template, vision_client):
 def main():
     st.title("🧾 供應商表單 PDF 掃描辨識工具")
     st.caption("上傳掃描好的供應商資料表或評核表 PDF，自動辨識後請核對，確認無誤再存檔。")
-    st.caption("🔖 程式版本：2026-10-06-v10（修正：列對齊改用標籤上方格線；每一列各自量左右外框並吸附實際欄線，可處理縮小、歪斜、欄寬被改過的掃描）")
+    st.caption(f"🔖 程式版本：{APP_VERSION}（每一列用自己的標籤定位上框線，內容多撐高的列不再影響下面各列；左右依每列外框與實際欄線對齊；程式更新後自動重新辨識）")
 
     with st.expander("🔧 Secrets 診斷工具(排除問題用，確認沒問題後可以刪掉這段)"):
         try:
@@ -285,7 +288,8 @@ def main():
         return
 
     pdf_bytes = uploaded_pdf.getvalue()
-    cache_key = f"{form_type_name}::{uploaded_pdf.name}"
+    # 暫存鍵包含「程式版本 + 檔案內容」：程式更新後、或同檔名但內容不同時，一定重新辨識，不會沿用舊結果
+    cache_key = f"{APP_VERSION}::{form_type_name}::{uploaded_pdf.name}::{hashlib.md5(pdf_bytes).hexdigest()}"
     if st.session_state.get("_current_key") != cache_key:
         # 換了表單類型或新檔案，清掉之前的暫存結果
         st.session_state["_current_key"] = cache_key
