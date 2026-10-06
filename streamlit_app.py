@@ -34,19 +34,19 @@ import json
 from io import BytesIO
 
 import streamlit as st
-import fitz  # PyMuPDF
 from PIL import Image
 from google.cloud import vision
 
 from drive_utils import get_drive_service, find_or_create_folder, find_file_id, download_file_bytes, upload_or_update_xlsx
 from vision_utils import crop_field, ocr_text, is_checked, find_label_boxes
 from master_utils import build_columns, record_filename, eval_record_filename, append_row_to_workbook, upsert_row_in_summary, build_row_dict, aggregate_score, read_rows_from_workbook, upsert_marked_row
-from auto_align import compute_zone_transform, remap_box, compute_row_sequence, remap_box_row_sequence, refine_column_divider, ocr_labels_to_line_seed, snap_cell_x, remap_x_row_local
+from extract_core import (RENDER_DPI, check_eval_record, load_template, pdf_to_images, compute_ocr_y_seed,
+                          resolve_box, run_extraction)
+from auto_align import compute_zone_transform, compute_row_sequence
 
 st.set_page_config(page_title="供應商資料表 PDF 辨識工具", page_icon="🧾", layout="wide")
 
-APP_VERSION = "2026-10-06-v12"
-RENDER_DPI = 200  # 必須跟 templates/*.json 校正時使用的 DPI 一致
+APP_VERSION = "2026-10-06-v14"
 
 
 FORM_TYPES = {
@@ -77,15 +77,6 @@ FORM_TYPES = {
 }
 
 
-def load_template(template_path):
-    """
-    讀取表單座標設定檔。這裡刻意不加 @st.cache_data——
-    這個檔案很小、讀取很快，不需要快取；而且快取是用「檔案路徑字串」當依據，
-    不是看檔案實際內容，曾經發生過 GitHub 上的檔案明明已經更新，
-    但快取沒清乾淨、程式還在用記憶體裡舊內容的狀況，拿掉快取直接根除這個風險。
-    """
-    with open(template_path, encoding="utf-8") as f:
-        return json.load(f)
 
 
 @st.cache_resource
@@ -102,150 +93,11 @@ def get_drive():
     return get_drive_service(creds_info)
 
 
-def pdf_to_images(pdf_bytes: bytes, dpi: int = RENDER_DPI):
-    """回傳 PDF 每一頁的圖片列表(index 0 = 第1頁)。"""
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    zoom = dpi / 72
-    mat = fitz.Matrix(zoom, zoom)
-    images = []
-    for page in doc:
-        pix = page.get_pixmap(matrix=mat)
-        images.append(Image.frombytes("RGB", [pix.width, pix.height], pix.samples))
-    return images
-
-
-def get_field_page_image(page_images, field_or_option):
-    """依欄位設定的 page(預設第1頁，1-indexed)取出對應頁面的圖片。"""
-    page_no = field_or_option.get("page", 1)
-    idx = page_no - 1
-    if idx >= len(page_images):
-        raise ValueError(f"這份 PDF 只有 {len(page_images)} 頁，但欄位設定要讀第 {page_no} 頁，頁數對不上。")
-    return page_images[idx]
-
-
-def compute_ocr_y_seed(vision_client, page_img, zone):
-    """
-    用 OCR 找出 zone 設定裡指定的「印刷標籤文字」實際位置，換算成對應的 y_map 種子值。
-    這是用來取代「抓格線」定位法的替代方案——格線有時候會因為掃描品質、印刷深淺
-    而斷掉、消失，導致誤判；改用「直接找標籤文字在哪裡」來定位前幾條最容易出錯的
-    格線，找不到的標籤就不種，讓後續邏輯退回原本的格線校正方式。
-
-    zone 需要有 "ocr_anchors" 設定，格式為 {模板y座標: 標籤文字}，例如：
-      {296: "中文", 376: "英文", 452: "服務範疇"}
-    """
-    ocr_anchors = zone.get("ocr_anchors")
-    if not ocr_anchors or not vision_client:
-        return {}
-    try:
-        targets = sorted({c for spec in ocr_anchors.values() for c in str(spec).split("|")})
-        label_boxes = find_label_boxes(vision_client, page_img, targets)
-    except Exception as e:
-        st.warning(f"OCR 標籤定位失敗，退回原本的格線校正方式：{e}")
-        return {}
-    # 標籤文字頂端 ≠ 格線位置：改從標籤往上找最近的橫線當作這一列的上框線(見 auto_align.ocr_labels_to_line_seed)
-    label_tops = {text: box[1] for text, box in label_boxes.items()}
-    return ocr_labels_to_line_seed(page_img, zone, label_tops)
-
-
-def resolve_box(field_or_option, page_images, template, zone_transform_cache, vision_client=None):
-    """
-    取得欄位實際要裁切的座標。
-    如果這個模板有定義 zones，而且這個欄位有指定 zone，就先在這一頁實際圖片上
-    重新校正一次(每個 zone 每一頁只需要算一次，用 cache 避免重複計算)，
-    把模板座標動態對應到這一頁真正的格線位置，才回傳最終座標。
-
-    zone 的型別分兩種：
-      - 一般(預設)：用區塊頭尾兩個錨點抓一個縮放比例，套用到區塊內所有欄位。
-      - "rows"：列高可能不規則(例如評分表)，改用逐列往下找的方式，更準確；
-                如果 zone 有設定 "ocr_anchors"，會先用 OCR 標籤定位校正前幾條
-                最容易出錯的格線，其餘的才用格線偵測。
-    """
-    box = field_or_option["box"]
-    zone_name = field_or_option.get("zone")
-    zones = template.get("zones")
-    if not zone_name or not zones or zone_name not in zones:
-        return box
-
-    zone = zones[zone_name]
-    page_no = field_or_option.get("page", 1)
-    cache_key = (page_no, zone_name)
-
-    if zone.get("type") == "rows":
-        if cache_key not in zone_transform_cache:
-            page_img = get_field_page_image(page_images, field_or_option)
-            ocr_y_seed = compute_ocr_y_seed(vision_client, page_img, zone) if zone.get("ocr_anchors") else None
-            zone_transform_cache[cache_key] = compute_row_sequence(page_img, zone, ocr_y_seed=ocr_y_seed)
-        result_box = remap_box_row_sequence(box, zone_transform_cache[cache_key])
-    else:
-        if cache_key not in zone_transform_cache:
-            page_img = get_field_page_image(page_images, field_or_option)
-            zone_transform_cache[cache_key] = compute_zone_transform(page_img, zone)
-        result_box = remap_box(box, zone_transform_cache[cache_key])
-
-    if zone.get("row_local_x"):
-        page_img = get_field_page_image(page_images, field_or_option)
-        result_box = remap_x_row_local(page_img, box, result_box, zone)
-
-    if zone.get("snap_cell_x") and field_or_option.get("type") == "text":
-        page_img = get_field_page_image(page_images, field_or_option)
-        result_box = snap_cell_x(page_img, result_box)
-
-    if field_or_option.get("column_refine"):
-        page_img = get_field_page_image(page_images, field_or_option)
-        result_box = refine_column_divider(page_img, result_box)
-
-    return result_box
-
-
-def run_extraction(page_images, template, vision_client):
-    """對整份表格跑一次辨識，回傳 {欄位名: 建議值} 的字典，供畫面顯示與人工核對。"""
-    suggestions = {}
-    crops = {}
-    boxes_used = {}
-    zone_transform_cache = {}
-    for field in template["fields"]:
-        if field["type"] == "text":
-            img = get_field_page_image(page_images, field)
-            box = resolve_box(field, page_images, template, zone_transform_cache, vision_client)
-            crop = crop_field(img, box)
-            crops[field["name"]] = crop
-            boxes_used[field["name"]] = box
-            try:
-                suggestions[field["name"]] = ocr_text(vision_client, crop)
-            except Exception as e:
-                suggestions[field["name"]] = ""
-                st.warning(f"「{field['name']}」辨識失敗：{e}")
-        elif field["type"] == "checkbox_single":
-            img = get_field_page_image(page_images, field)
-            box = resolve_box(field, page_images, template, zone_transform_cache, vision_client)
-            crop = crop_field(img, box)
-            crops[field["name"]] = crop
-            boxes_used[field["name"]] = box
-            checked, ratio = is_checked(img, box)
-            suggestions[field["name"]] = "是" if checked else "否"
-        elif field["type"] == "checkbox_group":
-            best_label, best_ratio = None, 0
-            option_crops = []
-            option_boxes = []
-            for opt in field["options"]:
-                img = get_field_page_image(page_images, opt)
-                box = resolve_box(opt, page_images, template, zone_transform_cache, vision_client)
-                crop = crop_field(img, box)
-                option_crops.append((opt["label"], crop))
-                option_boxes.append((opt["label"], box))
-                checked, ratio = is_checked(img, box)
-                if checked and ratio > best_ratio:
-                    best_label, best_ratio = opt["label"], ratio
-            crops[field["name"]] = option_crops
-            boxes_used[field["name"]] = option_boxes
-            suggestions[field["name"]] = best_label or ""
-    return suggestions, crops, boxes_used
-
 
 def main():
     st.title("🧾 供應商表單 PDF 掃描辨識工具")
     st.caption("上傳掃描好的供應商資料表或評核表 PDF，自動辨識後請核對，確認無誤再存檔。")
-    st.caption(f"🔖 程式版本：{APP_VERSION}（每一列用自己的標籤定位上框線，內容多撐高的列不再影響下面各列；左右依每列外框與實際欄線對齊；程式更新後自動重新辨識）")
+    st.caption(f"🔖 程式版本：{APP_VERSION}（判讀核心與 API 共用；勾選判斷排除框線誤判；評核表存檔前檢查分數）")
 
     with st.expander("🔧 Secrets 診斷工具(排除問題用，確認沒問題後可以刪掉這段)"):
         try:
@@ -315,7 +167,7 @@ def main():
                         st.write(f"— zone「{zone_name}」—")
                         if zone.get("type") == "rows":
                             page_img = record_images[zone.get("page", 1) - 1]
-                            ocr_seed = compute_ocr_y_seed(vision_client, page_img, zone) if zone.get("ocr_anchors") else None
+                            ocr_seed = compute_ocr_y_seed(vision_client, page_img, zone, st.warning) if zone.get("ocr_anchors") else None
                             if zone.get("ocr_anchors"):
                                 st.write("OCR 標籤定位結果(模板座標 → OCR 找到的座標)：", ocr_seed)
                             rowseq = compute_row_sequence(page_img, zone, ocr_y_seed=ocr_seed)
@@ -329,7 +181,7 @@ def main():
                 first_box = resolve_box(first_text_field, record_images, template, zone_cache_debug, vision_client)
                 st.write(f"「{first_text_field['name']}」實際裁切座標：", first_box, "（模板原始座標：", first_text_field["box"], "）")
 
-            suggestions, crops, boxes_used = run_extraction(record_images, template, vision_client)
+            suggestions, crops, boxes_used = run_extraction(record_images, template, vision_client, st.warning)
             st.session_state["_record"] = {"suggestions": suggestions, "crops": crops, "boxes_used": boxes_used, "saved": False}
 
     record = st.session_state["_record"]
@@ -372,6 +224,12 @@ def main():
                 edited[name] = st.radio(name, option_labels, index=default_idx, key=widget_key, horizontal=True, disabled=record["saved"])
 
         st.divider()
+
+    if form_cfg.get("aggregate"):
+        eval_warns, subtotal, full = check_eval_record(edited)
+        st.markdown(f"**本單位得分合計(含加分)：{subtotal:g}**" + (f"　（已填項目滿分合計 {full:g}）" if full else ""))
+        if eval_warns:
+            st.warning("請核對：\n\n" + "\n".join(f"- {w}" for w in eval_warns))
 
     fname = filename_fn(edited if not record["saved"] else record.get("saved_data", edited))
 

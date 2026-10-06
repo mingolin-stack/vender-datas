@@ -105,10 +105,31 @@ def find_label_boxes(vision_client, pil_image: Image.Image, target_texts: list) 
     return found
 
 
-def is_checked(page_image: Image.Image, box, margin: int = 6, threshold: float = 0.005) -> bool:
-    """裁切出勾選格，量測扣掉邊界後的黑色像素比例，超過門檻視為「已勾選」。"""
+def is_checked(page_image: Image.Image, box, margin: int = 6, threshold: float = 0.005):
+    """
+    判斷勾選格有沒有打勾，回傳 (是否勾選, 筆跡比例)。
+
+    舊做法只算「框內黑色像素比例」，但掃描歪斜或縮小時，表格框線(或斷斷續續的虛線)
+    常常會落進框裡，被誤判成有勾。新做法把框內的黑色區塊一塊一塊分開看，
+    只計算「像勾號的筆跡」：高度至少 12px、寬度至少 8px 的區塊；
+    細長的橫線、直線碎段(不管連續或斷續)都不算。
+    """
+    import cv2
     x0, y0, x1, y1 = box
-    gray = page_image.convert("L").crop((x0 + margin, y0 + margin, x1 - margin, y1 - margin))
-    arr = np.array(gray)
-    dark_ratio = (arr < 150).sum() / arr.size
-    return dark_ratio > threshold, dark_ratio
+    w, h = x1 - x0, y1 - y0
+    mx, my = max(margin, int(w * 0.06)), max(margin, int(h * 0.12))
+    if w - 2 * mx < 5 or h - 2 * my < 5:
+        return False, 0.0
+    arr = np.array(page_image.convert("L").crop((x0 + mx, y0 + my, x1 - mx, y1 - my)))
+    ink = ((arr < 150) * 255).astype(np.uint8)
+    H, W = ink.shape
+    n, _, stats, _ = cv2.connectedComponentsWithStats(ink, 8)
+    mark = 0
+    for i in range(1, n):
+        bw, bh, area = stats[i, 2], stats[i, 3], stats[i, 4]
+        if bw >= 0.9 * W or (bh >= 0.95 * H and bw <= 6):   # 橫跨整格的框線、貼邊的直線
+            continue
+        if bh >= 12 and bw >= 8 and area >= 25:
+            mark += area
+    ratio = mark / ink.size
+    return mark >= 25, ratio

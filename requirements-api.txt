@@ -1,0 +1,10 @@
+# 判讀 API (Cloud Run) 用的套件；Streamlit 用的是 requirements.txt
+fastapi
+uvicorn[standard]
+python-multipart
+PyMuPDF
+Pillow
+numpy
+opencv-python-headless
+google-cloud-vision
+google-auth

@@ -71,3 +71,27 @@ token_uri = "https://oauth2.googleapis.com/token"
 如果要新增第三種表單類型，在 `streamlit_app.py` 開頭的 `FORM_TYPES` 字典裡，比照現有兩種表單的寫法加一組設定即可(模板路徑、建檔規則、彙總表要用覆蓋更新還是每次新增列)。
 
 如果掃描解析度(DPI)跟目前的 200 不一樣，座標需要等比例換算，或是統一約定所有掃描都固定用 200 DPI，比較不容易出錯。
+
+## 判讀 API(給「供應商管理 App」呼叫)
+
+`api.py` 跟 Streamlit 共用同一套判讀核心 `extract_core.py`，修正一次兩邊同時生效。
+
+| 端點 | 說明 |
+|---|---|
+| `GET /health` | 健康檢查 |
+| `POST /api/extract_vendor`、`POST /api/extract` | 上傳 `file`，`document_type` = `supplier_form`(資料表) / `supplier_evaluation`(評核表)；`quotation`(報價單)尚未支援 |
+
+回傳：`{success, document_type, normalized:{...}, fields:{原始欄位:值}, warnings:[...]}`。
+資料表的 `normalized` 用主 App 認得的英文 key(company_name_zh、tax_id…)；評核表的 `items` 中 `max_score`=評分(該項最高給分)、`score`=得分(實際分數)。
+
+### 部署到 Cloud Run(沿用原本的服務名稱，網址不變)
+
+在 Google Cloud Console 右上角開啟 Cloud Shell，執行：
+
+```bash
+git clone https://github.com/mingolin-stack/vender-datas.git
+cd vender-datas
+gcloud run deploy vendor-data-api --source . --region asia-east1
+```
+
+原本設定的環境變數(例如 `VENDOR_API_KEY`)會保留。Cloud Run 的服務帳戶需要有 Cloud Vision API 權限。
