@@ -40,7 +40,7 @@ from google.cloud import vision
 from drive_utils import get_drive_service, find_or_create_folder, find_file_id, download_file_bytes, upload_or_update_xlsx
 from vision_utils import crop_field, ocr_text, is_checked, find_label_boxes
 from master_utils import build_columns, record_filename, eval_record_filename, append_row_to_workbook, upsert_row_in_summary, build_row_dict, aggregate_score, read_rows_from_workbook, upsert_marked_row
-from auto_align import compute_zone_transform, remap_box, compute_row_sequence, remap_box_row_sequence, refine_column_divider, ocr_labels_to_line_seed
+from auto_align import compute_zone_transform, remap_box, compute_row_sequence, remap_box_row_sequence, refine_column_divider, ocr_labels_to_line_seed, snap_cell_x, remap_x_row_local
 
 st.set_page_config(page_title="供應商資料表 PDF 辨識工具", page_icon="🧾", layout="wide")
 
@@ -179,6 +179,14 @@ def resolve_box(field_or_option, page_images, template, zone_transform_cache, vi
             zone_transform_cache[cache_key] = compute_zone_transform(page_img, zone)
         result_box = remap_box(box, zone_transform_cache[cache_key])
 
+    if zone.get("row_local_x"):
+        page_img = get_field_page_image(page_images, field_or_option)
+        result_box = remap_x_row_local(page_img, box, result_box, zone)
+
+    if zone.get("snap_cell_x") and field_or_option.get("type") == "text":
+        page_img = get_field_page_image(page_images, field_or_option)
+        result_box = snap_cell_x(page_img, result_box)
+
     if field_or_option.get("column_refine"):
         page_img = get_field_page_image(page_images, field_or_option)
         result_box = refine_column_divider(page_img, result_box)
@@ -234,7 +242,7 @@ def run_extraction(page_images, template, vision_client):
 def main():
     st.title("🧾 供應商表單 PDF 掃描辨識工具")
     st.caption("上傳掃描好的供應商資料表或評核表 PDF，自動辨識後請核對，確認無誤再存檔。")
-    st.caption("🔖 程式版本：2026-10-06-v9（修正：OCR 標籤定位改為「標籤上方最近的格線」，避免供應商資料表整張往下偏一列）")
+    st.caption("🔖 程式版本：2026-10-06-v10（修正：列對齊改用標籤上方格線；每一列各自量左右外框並吸附實際欄線，可處理縮小、歪斜、欄寬被改過的掃描）")
 
     with st.expander("🔧 Secrets 診斷工具(排除問題用，確認沒問題後可以刪掉這段)"):
         try:

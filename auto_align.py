@@ -432,3 +432,85 @@ def ocr_labels_to_line_seed(pil_image, zone, label_tops, max_up=120):
             continue
         seed[int(template_y)] = y
     return seed
+
+
+def snap_cell_x(pil_image, box, search_radius=90, min_cover=0.85):
+    """
+    把欄位框的左右邊，吸附到「這一列」裡最靠近的直線(儲存格框線)。
+
+    有些供應商是拿電子檔自己填寫，會不小心拉動欄寬，例如標籤欄變寬、
+    電話欄右邊多一格，整張表外框還是同樣大小，但中間的直線位置跟模板不同。
+    只靠外框換算會裁到隔壁格(例如多裁到標籤的「名」、或切掉電話第一碼)。
+
+    判斷直線的條件：從這一列上框線一路連到下框線(覆蓋 min_cover 以上的列高)，
+    手寫或印刷的字不會這麼長，不會被誤認。找不到就維持原本位置。
+    """
+    x0, y0, x1, y1 = box
+    gray = np.array(pil_image.convert("L"))
+    binary = _binary(gray)
+    h, w = binary.shape
+    top, bottom = max(0, y0 + 3), min(h, y1 - 3)
+    if bottom - top < 20:
+        return box
+    band = binary[top:bottom, :]
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(int((bottom - top) * min_cover), 10)))
+    cols = cv2.erode(band, kernel).any(axis=0)
+
+    def nearest(x):
+        lo, hi = max(0, x - search_radius), min(w, x + search_radius)
+        xs = np.where(cols[lo:hi])[0]
+        if not len(xs):
+            return x
+        return int(lo + xs[np.argmin(np.abs(lo + xs - x))])
+
+    nx0, nx1 = nearest(x0), nearest(x1)
+    if nx1 - nx0 < (x1 - x0) * 0.5:      # 吸附後寬度縮太多，判定為誤判，維持原框
+        return box
+    return [nx0, y0, nx1, y1]
+
+
+def _row_vlines(binary, y0, y1, min_cover=0.85):
+    """回傳這一列(y0~y1)裡，從上框連到下框的直線所在的 x 位置(布林陣列)。"""
+    h = binary.shape[0]
+    top, bottom = max(0, y0 + 3), min(h, y1 - 3)
+    if bottom - top < 15:
+        return None
+    band = binary[top:bottom, :]
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(int((bottom - top) * min_cover), 10)))
+    return cv2.erode(band, kernel).any(axis=0)
+
+
+def _nearest_true(cols, x, radius):
+    w = len(cols)
+    lo, hi = max(0, x - radius), min(w, x + radius)
+    xs = np.where(cols[lo:hi])[0]
+    if not len(xs):
+        return None
+    return int(lo + xs[np.argmin(np.abs(lo + xs - x))])
+
+
+def remap_x_row_local(pil_image, template_box, mapped_box, zone, radius=110):
+    """
+    用「這一列自己的左右外框」重新換算欄位的 x 座標。
+
+    有些掃描檔不是單純位移或縮放，而是歪斜變形(橫線是平的，但直線往一邊斜，
+    表格上下兩端的左框線差十幾像素)。整張表只算一組 x 位移/縮放的話，
+    越往下越偏，勾選框、附件欄就會裁到隔壁格。改成每一列各自找左右外框，
+    就不受歪斜影響。找不到外框的列，維持原本的換算結果。
+    """
+    binary = _binary(np.array(pil_image.convert("L")))
+    cols = _row_vlines(binary, mapped_box[1], mapped_box[3])
+    if cols is None:
+        return mapped_box
+    al, ar = zone["anchor_left"], zone["anchor_right"]
+    # 以整張表的換算結果當作預期位置，在附近找這一列的左右外框
+    exp_l = mapped_box[0] - (template_box[0] - al) * ((mapped_box[2] - mapped_box[0]) / max(1, template_box[2] - template_box[0]))
+    exp_r = mapped_box[2] + (ar - template_box[2]) * ((mapped_box[2] - mapped_box[0]) / max(1, template_box[2] - template_box[0]))
+    L = _nearest_true(cols, int(round(exp_l)), radius)
+    R = _nearest_true(cols, int(round(exp_r)), radius)
+    if L is None or R is None or R - L < (ar - al) * 0.7:
+        return mapped_box
+    sx = (R - L) / (ar - al)
+    nx0 = L + (template_box[0] - al) * sx
+    nx1 = L + (template_box[2] - al) * sx
+    return [int(round(nx0)), mapped_box[1], int(round(nx1)), mapped_box[3]]
