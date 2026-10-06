@@ -381,3 +381,54 @@ def remap_box(box, transform):
     ny0 = t["y0"] + (y0 - t["ty0"]) * t["y_scale"]
     ny1 = t["y0"] + (y1 - t["ty0"]) * t["y_scale"]
     return [int(round(nx0)), int(round(ny0)), int(round(nx1)), int(round(ny1))]
+
+
+
+def _nearest_line_above(binary, x_range, y_top, max_up):
+    """在 y_top 上方 max_up 像素內，找出「最靠近 y_top」的一條橫線，回傳該線的中心 y；找不到回傳 None。"""
+    x0, x1 = x_range
+    lo, hi = max(0, y_top - max_up), max(0, y_top - 2)
+    if hi <= lo:
+        return None
+    strip = binary[lo:hi, x0:x1]
+    for pct in (0.6, 0.4, 0.25):
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(int((x1 - x0) * pct), 10), 1))
+        rows = np.where(cv2.erode(strip, kernel).any(axis=1))[0]
+        if len(rows):
+            end = rows[-1]
+            start = end
+            while start - 1 in rows:
+                start -= 1
+            return lo + int((start + end) // 2)
+    return None
+
+
+def ocr_labels_to_line_seed(pil_image, zone, label_tops, max_up=120):
+    """
+    把 OCR 找到的「印刷標籤文字頂端 y 座標」換算成「這一列上方格線」的實際 y 座標。
+
+    舊寫法直接把標籤文字頂端當成格線位置，但標籤是印在格子「裡面」的，
+    文字頂端比上方格線低 20~70 像素(服務範疇這種高的格子差最多)。一旦差距超過
+    後續逐列搜尋的範圍(±30)，之後每一列都找不到格線、只能沿用推算值，
+    整張表就固定往下偏，裁到下一列(例如聯絡人裁到匯款戶名)。
+
+    新寫法：從標籤頂端往上找「最靠近的那條橫線」，那就是這一列的上框線。
+    只看填寫欄位那一段(content_check_x_range)的橫線，避免被左邊合併儲存格
+    (例如「公司全名」跨兩列)的框線干擾。往上找不到線的標籤就不採用，
+    讓那一條退回原本的格線偵測。
+    """
+    binary = _binary(np.array(pil_image.convert("L")))
+    xr = zone.get("content_check_x_range") or [zone["anchor_left"], zone["anchor_right"]]
+    x_range = (int(xr[0]), int(xr[1]))
+    seed = {}
+    for template_y, label_text in sorted(zone.get("ocr_anchors", {}).items(), key=lambda kv: int(kv[0])):
+        if label_text not in label_tops:
+            continue
+        top = int(label_tops[label_text])
+        y = _nearest_line_above(binary, x_range, top, max_up)
+        if y is None:         # 範圍內沒有任何橫線 -> 不採用
+            continue
+        if seed and y <= max(seed.values()):   # 順序錯亂(OCR 找錯標籤)就不採用
+            continue
+        seed[int(template_y)] = y
+    return seed

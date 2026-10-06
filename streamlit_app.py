@@ -40,7 +40,7 @@ from google.cloud import vision
 from drive_utils import get_drive_service, find_or_create_folder, find_file_id, download_file_bytes, upload_or_update_xlsx
 from vision_utils import crop_field, ocr_text, is_checked, find_label_boxes
 from master_utils import build_columns, record_filename, eval_record_filename, append_row_to_workbook, upsert_row_in_summary, build_row_dict, aggregate_score, read_rows_from_workbook, upsert_marked_row
-from auto_align import compute_zone_transform, remap_box, compute_row_sequence, remap_box_row_sequence, refine_column_divider
+from auto_align import compute_zone_transform, remap_box, compute_row_sequence, remap_box_row_sequence, refine_column_divider, ocr_labels_to_line_seed
 
 st.set_page_config(page_title="供應商資料表 PDF 辨識工具", page_icon="🧾", layout="wide")
 
@@ -139,11 +139,9 @@ def compute_ocr_y_seed(vision_client, page_img, zone):
     except Exception as e:
         st.warning(f"OCR 標籤定位失敗，退回原本的格線校正方式：{e}")
         return {}
-    seed = {}
-    for template_y, label_text in ocr_anchors.items():
-        if label_text in label_boxes:
-            seed[int(template_y)] = label_boxes[label_text][1]  # 標籤框的 y0(頂端)
-    return seed
+    # 標籤文字頂端 ≠ 格線位置：改從標籤往上找最近的橫線當作這一列的上框線(見 auto_align.ocr_labels_to_line_seed)
+    label_tops = {text: box[1] for text, box in label_boxes.items()}
+    return ocr_labels_to_line_seed(page_img, zone, label_tops)
 
 
 def resolve_box(field_or_option, page_images, template, zone_transform_cache, vision_client=None):
@@ -236,7 +234,7 @@ def run_extraction(page_images, template, vision_client):
 def main():
     st.title("🧾 供應商表單 PDF 掃描辨識工具")
     st.caption("上傳掃描好的供應商資料表或評核表 PDF，自動辨識後請核對，確認無誤再存檔。")
-    st.caption("🔖 程式版本：2026-10-02-v8（移除模板讀取的快取，避免更新GitHub檔案後程式仍沿用記憶體裡的舊版本；格線偵測改為由嚴到鬆分階段嘗試）")
+    st.caption("🔖 程式版本：2026-10-06-v9（修正：OCR 標籤定位改為「標籤上方最近的格線」，避免供應商資料表整張往下偏一列）")
 
     with st.expander("🔧 Secrets 診斷工具(排除問題用，確認沒問題後可以刪掉這段)"):
         try:
@@ -333,14 +331,14 @@ def main():
 
         if field["type"] == "text":
             with col_img:
-                st.image(record["crops"][name], use_container_width=True)
+                st.image(record["crops"][name], width="stretch")
                 st.caption(f"裁切座標：{record.get('boxes_used', {}).get(name)}")
             with col_val:
                 edited[name] = st.text_input(name, value=record["suggestions"][name], key=widget_key, disabled=record["saved"])
 
         elif field["type"] == "checkbox_single":
             with col_img:
-                st.image(record["crops"][name], use_container_width=True)
+                st.image(record["crops"][name], width="stretch")
                 st.caption(f"裁切座標：{record.get('boxes_used', {}).get(name)}")
             with col_val:
                 default_yes = record["suggestions"][name] == "是"
@@ -355,7 +353,7 @@ def main():
                 thumb_cols = st.columns(len(record["crops"][name]))
                 for tc, (label, crop) in zip(thumb_cols, record["crops"][name]):
                     with tc:
-                        st.image(crop, caption=label, use_container_width=True)
+                        st.image(crop, caption=label, width="stretch")
                         st.caption(f"{option_boxes.get(label)}")
             with col_val:
                 default_idx = option_labels.index(suggested) if suggested in option_labels else 0
