@@ -99,24 +99,6 @@ def main():
     st.caption("上傳掃描好的供應商資料表或評核表 PDF，自動辨識後請核對，確認無誤再存檔。")
     st.caption(f"🔖 程式版本：{APP_VERSION}（判讀核心與 API 共用；勾選判斷排除框線誤判；評核表存檔前檢查分數）")
 
-    with st.expander("🔧 Secrets 診斷工具(排除問題用，確認沒問題後可以刪掉這段)"):
-        try:
-            info = dict(st.secrets["gcp_service_account"])
-            pk = info.get("private_key", "")
-            st.write("client_email:", repr(info.get("client_email", "")))
-            st.write("project_id:", repr(info.get("project_id", "")))
-            st.write("private_key_id:", repr(info.get("private_key_id", "")))
-            st.write("client_id:", repr(info.get("client_id", "")))
-            st.write("token_uri:", repr(info.get("token_uri", "")))
-            st.write("private_key 開頭 20 字元:", repr(pk[:20]))
-            st.write("private_key 結尾 20 字元:", repr(pk[-20:]))
-            st.write("private_key 總長度:", len(pk))
-            st.write("private_key 裡「真的換行符號」數量:", pk.count("\n"))
-            st.write("private_key 裡「反斜線+n 兩個字元」數量:", pk.count("\\n"))
-            st.write("drive_folder_id:", repr(st.secrets.get("drive_folder_id", "")))
-        except Exception as e:
-            st.error(f"讀取 Secrets 時發生錯誤：{e}")
-
     form_type_name = st.radio("① 選擇表單類型", list(FORM_TYPES.keys()), horizontal=True, key="form_type")
     form_cfg = FORM_TYPES[form_type_name]
     template = load_template(form_cfg["template_path"])
