@@ -15,8 +15,8 @@
       "anchor_right": 1493,
       "anchor_bottom": 585,
       "page_top_line": 119,
-      "y_search": 30,
-      "x_search": 70,
+      "y_search": 20,
+      "x_search": 120,
       "x_prefer_near": true
     },
     "scoring_table": {
@@ -41,10 +41,11 @@
         2005,
         2125
       ],
-      "y_search_first": 60,
+      "y_search_first": 20,
       "y_search_step": 30,
-      "x_search": 70,
-      "x_prefer_near": true
+      "x_search": 120,
+      "x_prefer_near": true,
+      "page_top_line": 119
     },
     "bonus_table": {
       "type": "rows",
@@ -56,9 +57,9 @@
         389,
         509
       ],
-      "y_search_first": 30,
+      "y_search_first": 20,
       "y_search_step": 30,
-      "x_search": 70,
+      "x_search": 120,
       "x_prefer_near": true,
       "page_top_line": 119
     },
@@ -68,8 +69,8 @@
       "anchor_top": 560,
       "anchor_right": 1496,
       "anchor_bottom": 880,
-      "y_search": 30,
-      "x_search": 70,
+      "y_search": 20,
+      "x_search": 120,
       "x_prefer_near": true,
       "page_top_line": 119
     }

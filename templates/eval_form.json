@@ -15,10 +15,11 @@
       "detect_hline": {
         "page": 1,
         "y_range": [
-          1950,
+          1960,
           2250
         ],
-        "min_width_frac": 0.5
+        "min_width_frac": 0.5,
+        "page_top_line": 139
       }
     }
   ],
@@ -29,9 +30,10 @@
       "anchor_top": 316,
       "anchor_right": 1473,
       "anchor_bottom": 614,
-      "y_search": 35,
-      "x_search": 70,
-      "x_prefer_near": true
+      "y_search": 20,
+      "x_search": 120,
+      "x_prefer_near": true,
+      "page_top_line": 139
     },
     "scoring_table": {
       "type": "rows",
@@ -52,10 +54,11 @@
         1777,
         1884
       ],
-      "y_search_first": 60,
+      "y_search_first": 20,
       "y_search_step": 30,
-      "x_search": 70,
-      "x_prefer_near": true
+      "x_search": 120,
+      "x_prefer_near": true,
+      "page_top_line": 139
     },
     "bonus_table": {
       "type": "rows",
@@ -67,10 +70,11 @@
         535,
         655
       ],
-      "y_search_first": 60,
+      "y_search_first": 20,
       "y_search_step": 30,
-      "x_search": 70,
-      "x_prefer_near": true
+      "x_search": 120,
+      "x_prefer_near": true,
+      "page_top_line": 139
     },
     "summary": {
       "page": 2,
@@ -78,9 +82,10 @@
       "anchor_top": 757,
       "anchor_right": 1477,
       "anchor_bottom": 992,
-      "y_search": 30,
-      "x_search": 70,
-      "x_prefer_near": true
+      "y_search": 20,
+      "x_search": 120,
+      "x_prefer_near": true,
+      "page_top_line": 139
     }
   },
   "fields": [
