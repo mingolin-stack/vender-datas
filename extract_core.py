@@ -77,6 +77,24 @@ def check_eval_record(values: dict):
 
 
 
+NUMERIC_SUFFIXES = ("_評分", "_得分", "_加分")
+_DIGIT_FIX = str.maketrans({"O": "0", "o": "0", "〇": "0", "Ｏ": "0", "l": "1", "I": "1", "|": "1", "｜": "1", "丨": "1",
+                            **{chr(0xFF10 + i): str(i) for i in range(10)}, "．": "."})
+
+
+def clean_number(text: str) -> str:
+    """
+    分數欄位只會是數字：把 OCR 常見的誤認(O→0、l/I/|→1、全形數字)換回來，去掉空白和雜訊。
+    清完沒有任何數字就回傳原文，讓人工核對時看得到 OCR 原本讀到什麼。
+    """
+    fixed = "".join(c for c in text.translate(_DIGIT_FIX) if c.isdigit() or c == ".").strip(".")
+    return fixed if any(c.isdigit() for c in fixed) else text
+
+
+def is_numeric_field(name: str) -> bool:
+    return name.endswith(NUMERIC_SUFFIXES) or name == "評核總分"
+
+
 def load_template(template_path):
     """
     讀取表單座標設定檔。這裡刻意不加 @st.cache_data——
@@ -198,7 +216,8 @@ def run_extraction(page_images, template, vision_client, warn=None):
             crops[field["name"]] = crop
             boxes_used[field["name"]] = box
             try:
-                suggestions[field["name"]] = ocr_text(vision_client, crop)
+                text = ocr_text(vision_client, crop)
+                suggestions[field["name"]] = clean_number(text) if is_numeric_field(field["name"]) else text
             except Exception as e:
                 suggestions[field["name"]] = ""
                 _warn(warn, f"「{field['name']}」辨識失敗：{e}")

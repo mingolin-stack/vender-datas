@@ -83,8 +83,14 @@ def find_strong_hline(binary, x_range, expected_y, search_radius=130, backward=N
     return lo + int(best)
 
 
-def find_strong_vline(binary, y_range, expected_x, search_radius=45):
-    """在 expected_x 附近 ±search_radius 範圍內，找出最像「一條直線」的位置。"""
+def find_strong_vline(binary, y_range, expected_x, search_radius=45, prefer_near=False):
+    """
+    在 expected_x 附近 ±search_radius 範圍內，找出最像「一條直線」的位置。
+
+    prefer_near=True 時，跟 find_strong_hline 一樣，在「夠強」(達最強線條一半)的候選裡
+    挑離預期位置最近的一條。不同掃描檔的縮放可能差 2~3%，表格右框會差到 30~40px，
+    搜尋範圍要開大才找得到；開大後內部欄線也會進到範圍裡，用「最近」才不會鎖錯線。
+    """
     y0, y1 = y_range
     w = binary.shape[1]
     lo = max(0, expected_x - search_radius)
@@ -98,7 +104,10 @@ def find_strong_vline(binary, y_range, expected_x, search_radius=45):
     sums = lines.sum(axis=0)
     if sums.max() <= 0:
         return expected_x
-    return lo + int(np.argmax(sums))
+    if not prefer_near:
+        return lo + int(np.argmax(sums))
+    candidates = np.where(sums >= sums.max() * 0.5)[0]
+    return lo + int(candidates[np.argmin(np.abs(lo + candidates - expected_x))])
 
 
 def ink_ratio(binary, y0, y1, x_range):
@@ -297,8 +306,9 @@ def compute_row_sequence(pil_image, zone, ocr_y_seed=None):
         prev_template_y, prev_real_y = template_y, real_y
 
     x_search = zone.get("x_search", 30)
-    real_left = find_strong_vline(binary, (y_map[template_ys[0]], y_map[template_ys[-1]]), zone["anchor_left"], search_radius=x_search)
-    real_right = find_strong_vline(binary, (y_map[template_ys[0]], y_map[template_ys[-1]]), zone["anchor_right"], search_radius=x_search)
+    x_near = zone.get("x_prefer_near", False)
+    real_left = find_strong_vline(binary, (y_map[template_ys[0]], y_map[template_ys[-1]]), zone["anchor_left"], search_radius=x_search, prefer_near=x_near)
+    real_right = find_strong_vline(binary, (y_map[template_ys[0]], y_map[template_ys[-1]]), zone["anchor_right"], search_radius=x_search, prefer_near=x_near)
     x_span = zone["anchor_right"] - zone["anchor_left"]
     x_scale = (real_right - real_left) / x_span if x_span else 1.0
 
@@ -357,8 +367,9 @@ def compute_zone_transform(pil_image, zone):
 
     real_top = find_strong_hline(binary, (ax0, ax1), ay0, search_radius=y_search)
     real_bottom = find_strong_hline(binary, (ax0, ax1), ay1, search_radius=y_search)
-    real_left = find_strong_vline(binary, (real_top, real_bottom), ax0, search_radius=x_search)
-    real_right = find_strong_vline(binary, (real_top, real_bottom), ax1, search_radius=x_search)
+    x_near = zone.get("x_prefer_near", False)
+    real_left = find_strong_vline(binary, (real_top, real_bottom), ax0, search_radius=x_search, prefer_near=x_near)
+    real_right = find_strong_vline(binary, (real_top, real_bottom), ax1, search_radius=x_search, prefer_near=x_near)
 
     y_span = ay1 - ay0
     x_span = ax1 - ax0

@@ -25,9 +25,31 @@ def image_to_bytes(pil_image: Image.Image) -> bytes:
     return buf.getvalue()
 
 
+def remove_table_lines(pil_image: Image.Image, min_frac: float = 0.6) -> Image.Image:
+    """
+    把裁切圖裡的表格框線塗白，只留下文字/手寫。
+    欄位框剛好貼著格線裁切，框線常被 OCR 讀成「1」「|」「—」，
+    例如得分格的「7」會變成「17」。長度超過圖寬(或圖高) min_frac 的直線、橫線才算框線，
+    手寫筆畫不會這麼長又這麼直，不會被誤刪。
+    """
+    import cv2
+    gray = np.array(pil_image.convert("L"))
+    h, w = gray.shape
+    if h < 10 or w < 10:
+        return pil_image
+    ink = ((gray < 180) * 255).astype(np.uint8)
+    hk = cv2.getStructuringElement(cv2.MORPH_RECT, (max(int(w * min_frac), 10), 1))
+    vk = cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(int(h * min_frac), 10)))
+    lines = cv2.dilate(cv2.morphologyEx(ink, cv2.MORPH_OPEN, hk) | cv2.morphologyEx(ink, cv2.MORPH_OPEN, vk),
+                       np.ones((3, 3), np.uint8))
+    out = gray.copy()
+    out[lines > 0] = 255
+    return Image.fromarray(out).convert("RGB")
+
+
 def ocr_text(vision_client, pil_image: Image.Image) -> str:
     """呼叫 Vision API 的文件文字辨識(document_text_detection)，適合手寫與整段文字。"""
-    content = image_to_bytes(pil_image)
+    content = image_to_bytes(remove_table_lines(pil_image))
     image = vision.Image(content=content)
     response = vision_client.document_text_detection(
         image=image,
