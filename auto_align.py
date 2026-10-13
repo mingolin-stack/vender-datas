@@ -83,8 +83,15 @@ def find_strong_hline(binary, x_range, expected_y, search_radius=130, backward=N
     return lo + int(best)
 
 
-def find_strong_vline(binary, y_range, expected_x, search_radius=45):
-    """在 expected_x 附近 ±search_radius 範圍內，找出最像「一條直線」的位置。"""
+def find_strong_vline(binary, y_range, expected_x, search_radius=45, prefer_near=False):
+    """
+    在 expected_x 附近 ±search_radius 範圍內，找出最像「一條直線」的位置。
+
+    prefer_near=True 時，跟 find_strong_hline 一樣，在「夠強」(達最強線條一半)的候選裡
+    挑離預期位置最近的一條。不同掃描檔的縮放可能差 2~3%，表格右框會差到 30~40px，
+    搜尋範圍要開大才找得到；開大後內部欄線也會進到範圍裡，用「最近」才不會鎖錯線。
+    同時容許掃描稍微歪斜(直線先左右加粗再比對)。
+    """
     y0, y1 = y_range
     w = binary.shape[1]
     lo = max(0, expected_x - search_radius)
@@ -92,13 +99,19 @@ def find_strong_vline(binary, y_range, expected_x, search_radius=45):
     if hi <= lo or y1 <= y0:
         return expected_x
     strip = binary[y0:y1, lo:hi]
+    if prefer_near:
+        # 掃描稍微歪斜時，長直線上下兩端會差好幾個像素，先左右加粗才不會整條斷掉找不到
+        strip = cv2.dilate(strip, cv2.getStructuringElement(cv2.MORPH_RECT, (9, 1)))
     kernel_h = max(int((y1 - y0) * 0.7), 10)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, kernel_h))
     lines = cv2.dilate(cv2.erode(strip, kernel), kernel)
     sums = lines.sum(axis=0)
     if sums.max() <= 0:
         return expected_x
-    return lo + int(np.argmax(sums))
+    if not prefer_near:
+        return lo + int(np.argmax(sums))
+    candidates = np.where(sums >= sums.max() * 0.5)[0]
+    return lo + int(candidates[np.argmin(np.abs(lo + candidates - expected_x))])
 
 
 def ink_ratio(binary, y0, y1, x_range):
@@ -227,6 +240,25 @@ def find_row_boundary_robust(binary, x_range, expected_y, next_gap, backward=30,
     return candidate
 
 
+def page_y_offset(binary, zone, min_width_frac=0.5):
+    """
+    整頁上下位移量：找頁面最上面第一條長橫線(例如表頭 LOGO 框的上框)，跟模板記錄的位置
+    zone["page_top_line"] 比較。這條線上方是空白，不會認錯；用它先把整頁的上下位移扣掉，
+    區塊第一條格線就不會因為位移 20~30px，誤抓到上方相距只有 30 幾 px 的另一條線。
+    zone 沒有設定 page_top_line，或整頁找不到夠長的橫線，就回傳 0(維持原本行為)。
+    """
+    template_y = zone.get("page_top_line")
+    if template_y is None:
+        return 0
+    h, w = binary.shape
+    # 先上下加粗，掃描稍微歪斜時一樣連得成一條線
+    thick = cv2.dilate(binary, cv2.getStructuringElement(cv2.MORPH_RECT, (1, 11)))
+    rows = np.where(cv2.erode(thick, cv2.getStructuringElement(cv2.MORPH_RECT, (int(w * min_width_frac), 1))).any(axis=1))[0]
+    if not len(rows):
+        return 0
+    return int(rows[0]) + 5 - template_y   # +5：扣掉上下加粗時多出來的半個核心
+
+
 def compute_row_sequence(pil_image, zone, ocr_y_seed=None):
     """
     針對「一整排列高可能不規則」的表格(例如評分表某些列因為換行文字而變高、
@@ -266,7 +298,7 @@ def compute_row_sequence(pil_image, zone, ocr_y_seed=None):
         content_check_x = zone.get("content_check_x_range")
         content_check_x = tuple(content_check_x) if content_check_x else None
         prev_real_y = find_first_anchor_with_content_check(
-            binary, x_range, template_ys[0], next_gap=first_gap, search_radius=y_search_first,
+            binary, x_range, template_ys[0] + page_y_offset(binary, zone), next_gap=first_gap, search_radius=y_search_first,
             content_check_x_range=content_check_x,
         )
     y_map[template_ys[0]] = prev_real_y
@@ -297,8 +329,9 @@ def compute_row_sequence(pil_image, zone, ocr_y_seed=None):
         prev_template_y, prev_real_y = template_y, real_y
 
     x_search = zone.get("x_search", 30)
-    real_left = find_strong_vline(binary, (y_map[template_ys[0]], y_map[template_ys[-1]]), zone["anchor_left"], search_radius=x_search)
-    real_right = find_strong_vline(binary, (y_map[template_ys[0]], y_map[template_ys[-1]]), zone["anchor_right"], search_radius=x_search)
+    x_near = zone.get("x_prefer_near", False)
+    real_left = find_strong_vline(binary, (y_map[template_ys[0]], y_map[template_ys[-1]]), zone["anchor_left"], search_radius=x_search, prefer_near=x_near)
+    real_right = find_strong_vline(binary, (y_map[template_ys[0]], y_map[template_ys[-1]]), zone["anchor_right"], search_radius=x_search, prefer_near=x_near)
     x_span = zone["anchor_right"] - zone["anchor_left"]
     x_scale = (real_right - real_left) / x_span if x_span else 1.0
 
@@ -355,10 +388,12 @@ def compute_zone_transform(pil_image, zone):
     y_search = zone.get("y_search", 40)
     x_search = zone.get("x_search", 35)
 
-    real_top = find_strong_hline(binary, (ax0, ax1), ay0, search_radius=y_search)
-    real_bottom = find_strong_hline(binary, (ax0, ax1), ay1, search_radius=y_search)
-    real_left = find_strong_vline(binary, (real_top, real_bottom), ax0, search_radius=x_search)
-    real_right = find_strong_vline(binary, (real_top, real_bottom), ax1, search_radius=x_search)
+    dy = page_y_offset(binary, zone)
+    real_top = find_strong_hline(binary, (ax0, ax1), ay0 + dy, search_radius=y_search)
+    real_bottom = find_strong_hline(binary, (ax0, ax1), ay1 + dy, search_radius=y_search)
+    x_near = zone.get("x_prefer_near", False)
+    real_left = find_strong_vline(binary, (real_top, real_bottom), ax0, search_radius=x_search, prefer_near=x_near)
+    real_right = find_strong_vline(binary, (real_top, real_bottom), ax1, search_radius=x_search, prefer_near=x_near)
 
     y_span = ay1 - ay0
     x_span = ax1 - ax0

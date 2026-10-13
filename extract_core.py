@@ -9,6 +9,7 @@ Streamlit 介面(streamlit_app.py)和判讀 API(api.py)共用這一份程式，
 """
 
 import json
+import os
 from io import BytesIO
 
 from PIL import Image
@@ -77,6 +78,24 @@ def check_eval_record(values: dict):
 
 
 
+NUMERIC_SUFFIXES = ("_評分", "_得分", "_加分")
+_DIGIT_FIX = str.maketrans({"O": "0", "o": "0", "〇": "0", "Ｏ": "0", "l": "1", "I": "1", "|": "1", "｜": "1", "丨": "1",
+                            **{chr(0xFF10 + i): str(i) for i in range(10)}, "．": "."})
+
+
+def clean_number(text: str) -> str:
+    """
+    分數欄位只會是數字：把 OCR 常見的誤認(O→0、l/I/|→1、全形數字)換回來，去掉空白和雜訊。
+    清完沒有任何數字就回傳原文，讓人工核對時看得到 OCR 原本讀到什麼。
+    """
+    fixed = "".join(c for c in text.translate(_DIGIT_FIX) if c.isdigit() or c == ".").strip(".")
+    return fixed if any(c.isdigit() for c in fixed) else text
+
+
+def is_numeric_field(name: str) -> bool:
+    return name.endswith(NUMERIC_SUFFIXES) or name == "評核總分"
+
+
 def load_template(template_path):
     """
     讀取表單座標設定檔。這裡刻意不加 @st.cache_data——
@@ -86,6 +105,72 @@ def load_template(template_path):
     """
     with open(template_path, encoding="utf-8") as f:
         return json.load(f)
+
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _has_long_hline(page_img, y_range, min_width_frac):
+    """頁面的 y_range 範圍內，有沒有一條橫跨 min_width_frac 頁寬以上的橫線(表格框線)。"""
+    import cv2
+    import numpy as np
+    gray = np.array(page_img.convert("L"))
+    y0, y1 = max(0, y_range[0]), min(gray.shape[0], y_range[1])
+    if y1 <= y0:
+        return False
+    ink = ((gray[y0:y1] < 180) * 255).astype(np.uint8)
+    # 先上下加粗，掃描稍微歪斜(線條左右兩端差幾個像素)時一樣連得起來
+    ink = cv2.dilate(ink, cv2.getStructuringElement(cv2.MORPH_RECT, (1, 11)))
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (int(gray.shape[1] * min_width_frac), 1))
+    return bool(cv2.erode(ink, kernel).any())
+
+
+def deskew_page(page_img, max_angle=2.0):
+    """
+    把掃描歪斜的頁面轉正。用頁面上的橫線(表格框線)量出傾斜角度後反向旋轉。
+    掃描檔常有 0.3~0.5 度的歪斜，橫跨整頁的格線左右兩端就會差 5~10px，
+    細的格線在比對時會斷掉、找不到，改抓到旁邊較粗的線。
+    做法：只留下橫線，在 ±max_angle 度內每 0.05 度試轉一次，挑橫線最「平」的角度。
+    沒有橫線、或角度太小(<0.05 度)就原圖回傳。
+    """
+    import cv2
+    import numpy as np
+    gray = np.array(page_img.convert("L"))
+    h, w = gray.shape
+    ink = ((gray < 180) * 255).astype(np.uint8)
+    lines = cv2.morphologyEx(ink, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (w // 10, 1)))
+    small = cv2.resize(lines, (w // 2, h // 2), interpolation=cv2.INTER_AREA).astype(np.float32)
+    if small.sum() == 0:
+        return page_img
+    # 逐一試轉角度，橫線全部轉平時，每一列的墨色加總會最集中(平方和最大)
+    center = (small.shape[1] / 2, small.shape[0] / 2)
+    best_angle, best_score = 0.0, -1.0
+    for angle in np.arange(-max_angle, max_angle + 1e-6, 0.05):
+        m = cv2.getRotationMatrix2D(center, angle, 1.0)
+        rotated = cv2.warpAffine(small, m, (small.shape[1], small.shape[0]))
+        score = float((rotated.sum(axis=1) ** 2).sum())
+        if score > best_score:
+            best_angle, best_score = float(angle), score
+    angle = best_angle
+    if abs(angle) < 0.05:
+        return page_img
+    return page_img.rotate(angle, resample=Image.BICUBIC, fillcolor=(255, 255, 255))
+
+
+def pick_template_version(template, page_images):
+    """
+    同一種表單有新舊版面時(例如評核表 V1.1 把 e1 移到第 1 頁)，依這份掃描檔的版面挑對的模板。
+    模板裡的 "versions" 列出其他版本與判斷方式，目前支援 detect_hline：
+    指定頁面的某個 y 範圍內有一條夠長的橫線，就是那個版本。都不符合就用原本的模板。
+    """
+    for ver in template.get("versions", []):
+        rule = ver.get("detect_hline")
+        if not rule:
+            continue
+        idx = rule.get("page", 1) - 1
+        if idx < len(page_images) and _has_long_hline(page_images[idx], rule["y_range"], rule.get("min_width_frac", 0.5)):
+            return load_template(os.path.join(BASE_DIR, ver["template"]))
+    return template
 
 
 def pdf_to_images(pdf_bytes: bytes, dpi: int = RENDER_DPI):
@@ -186,6 +271,9 @@ def resolve_box(field_or_option, page_images, template, zone_transform_cache, vi
 
 def run_extraction(page_images, template, vision_client, warn=None):
     """對整份表格跑一次辨識，回傳 {欄位名: 建議值} 的字典，供畫面顯示與人工核對。"""
+    if template.get("deskew"):
+        page_images = [deskew_page(p) for p in page_images]
+    template = pick_template_version(template, page_images)
     suggestions = {}
     crops = {}
     boxes_used = {}
@@ -198,7 +286,8 @@ def run_extraction(page_images, template, vision_client, warn=None):
             crops[field["name"]] = crop
             boxes_used[field["name"]] = box
             try:
-                suggestions[field["name"]] = ocr_text(vision_client, crop)
+                text = ocr_text(vision_client, crop)
+                suggestions[field["name"]] = clean_number(text) if is_numeric_field(field["name"]) else text
             except Exception as e:
                 suggestions[field["name"]] = ""
                 _warn(warn, f"「{field['name']}」辨識失敗：{e}")

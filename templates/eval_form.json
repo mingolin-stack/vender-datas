@@ -6,6 +6,22 @@
     "width": 1653,
     "height": 2339
   },
+  "deskew": true,
+  "versions": [
+    {
+      "name": "V1.1",
+      "template": "templates/eval_form_v1_1.json",
+      "note": "V1.1 第 1 頁評分表下方多了 e1 加分表，舊版那裡是空白",
+      "detect_hline": {
+        "page": 1,
+        "y_range": [
+          1950,
+          2250
+        ],
+        "min_width_frac": 0.5
+      }
+    }
+  ],
   "zones": {
     "header_info": {
       "page": 1,
@@ -14,7 +30,8 @@
       "anchor_right": 1473,
       "anchor_bottom": 614,
       "y_search": 35,
-      "x_search": 30
+      "x_search": 70,
+      "x_prefer_near": true
     },
     "scoring_table": {
       "type": "rows",
@@ -37,16 +54,23 @@
       ],
       "y_search_first": 60,
       "y_search_step": 30,
-      "x_search": 30
+      "x_search": 70,
+      "x_prefer_near": true
     },
     "bonus_table": {
+      "type": "rows",
       "page": 2,
       "anchor_left": 175,
-      "anchor_top": 314,
       "anchor_right": 1480,
-      "anchor_bottom": 655,
-      "y_search": 50,
-      "x_search": 30
+      "row_boundaries": [
+        416,
+        535,
+        655
+      ],
+      "y_search_first": 60,
+      "y_search_step": 30,
+      "x_search": 70,
+      "x_prefer_near": true
     },
     "summary": {
       "page": 2,
@@ -55,16 +79,8 @@
       "anchor_right": 1477,
       "anchor_bottom": 992,
       "y_search": 30,
-      "x_search": 30
-    },
-    "signature": {
-      "page": 2,
-      "anchor_left": 60,
-      "anchor_top": 1005,
-      "anchor_right": 1550,
-      "anchor_bottom": 1095,
-      "y_search": 30,
-      "x_search": 30
+      "x_search": 70,
+      "x_prefer_near": true
     }
   },
   "fields": [
@@ -642,12 +658,12 @@
       "name": "審核主管",
       "type": "text",
       "page": 2,
-      "zone": "signature",
+      "zone": "summary",
       "box": [
-        60,
-        1010,
+        330,
+        995,
         750,
-        1090
+        1115
       ],
       "required": false
     },
@@ -655,12 +671,12 @@
       "name": "評核人員(簽名)",
       "type": "text",
       "page": 2,
-      "zone": "signature",
+      "zone": "summary",
       "box": [
-        750,
-        1010,
+        930,
+        995,
         1550,
-        1090
+        1115
       ],
       "required": false
     }
