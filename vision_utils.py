@@ -47,18 +47,72 @@ def remove_table_lines(pil_image: Image.Image, min_frac: float = 0.6) -> Image.I
     return Image.fromarray(out).convert("RGB")
 
 
-def ocr_text(vision_client, pil_image: Image.Image) -> str:
-    """呼叫 Vision API 的文件文字辨識(document_text_detection)，適合手寫與整段文字。"""
-    content = image_to_bytes(remove_table_lines(pil_image))
-    image = vision.Image(content=content)
-    response = vision_client.document_text_detection(
-        image=image,
-        image_context={"language_hints": ["zh-TW", "zh"]},
-    )
+def prepare_digit_image(pil_image: Image.Image, target_h: int = 160, pad_ratio: float = 1.0) -> Image.Image:
+    """
+    分數格的手寫數字(單獨一個「7」)放大、加白邊，給 Vision 辨識。
+    Vision 對「小圖裡只有一個字」常常整個不回傳；把筆跡裁到剛好、放大到約 160px 高，
+    四周再留一圈跟字一樣大的白邊，就跟一般文件裡的字差不多大，辨識率會高很多。
+    沒塗乾淨的框線殘段(細長、貼著格子邊)和雜點不算筆跡，免得被讀成「1」或把字縮小。
+    沒有筆跡就回傳 None。
+    """
+    import cv2
+    gray = np.array(remove_table_lines(pil_image).convert("L"))
+    H, W = gray.shape
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(((gray < 160) * 255).astype(np.uint8), 8)
+    keep = np.zeros_like(gray, dtype=bool)
+    for i in range(1, n):
+        x, y, w, h, area = stats[i]
+        if area < 20:                                   # 掃描雜點
+            continue
+        thin = min(w, h) <= 5
+        at_edge = x <= 3 or y <= 3 or x + w >= W - 3 or y + h >= H - 3
+        if thin and (at_edge or w >= W * 0.5 or h >= H * 0.6):   # 沒塗乾淨的框線殘段
+            continue
+        keep |= labels == i
+    ys, xs = np.where(keep)
+    if len(xs) < 15:
+        return None
+    x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
+    glyph = Image.fromarray(np.where(keep, gray, 255).astype(np.uint8)[y0:y1, x0:x1])
+    scale = target_h / max(1, glyph.height)
+    glyph = glyph.resize((max(1, int(glyph.width * scale)), target_h), Image.LANCZOS)
+    pad = int(target_h * pad_ratio)
+    canvas = Image.new("L", (glyph.width + 2 * pad, glyph.height + 2 * pad), 255)
+    canvas.paste(glyph, (pad, pad))
+    return canvas.convert("RGB")
+
+
+def _vision_text(vision_client, pil_image: Image.Image, hints, document=True) -> str:
+    image = vision.Image(content=image_to_bytes(pil_image))
+    context = {"language_hints": hints}
+    if document:
+        response = vision_client.document_text_detection(image=image, image_context=context)
+    else:
+        response = vision_client.text_detection(image=image, image_context=context)
     if response.error.message:
         raise RuntimeError(f"Vision API 錯誤: {response.error.message}")
-    text = response.full_text_annotation.text if response.full_text_annotation else ""
+    if document:
+        text = response.full_text_annotation.text if response.full_text_annotation else ""
+    else:
+        text = response.text_annotations[0].description if response.text_annotations else ""
     return text.strip().replace("\n", " ")
+
+
+def ocr_text(vision_client, pil_image: Image.Image, numeric: bool = False) -> str:
+    """
+    呼叫 Vision API 的文件文字辨識(document_text_detection)，適合手寫與整段文字。
+    numeric=True(分數欄位)：先把手寫數字放大加白邊、改用英文數字提示；
+    還是讀不到，再改用 text_detection 試一次，最後才退回原本中文模式。
+    """
+    if numeric:
+        digit_img = prepare_digit_image(pil_image)
+        if digit_img is None:
+            return ""
+        for document in (True, False):
+            text = _vision_text(vision_client, digit_img, ["en"], document=document)
+            if any(c.isdigit() for c in text):
+                return text
+    return _vision_text(vision_client, remove_table_lines(pil_image), ["zh-TW", "zh"])
 
 
 def _word_text(word) -> str:

@@ -286,8 +286,9 @@ def run_extraction(page_images, template, vision_client, warn=None):
             crops[field["name"]] = crop
             boxes_used[field["name"]] = box
             try:
-                text = ocr_text(vision_client, crop)
-                suggestions[field["name"]] = clean_number(text) if is_numeric_field(field["name"]) else text
+                numeric = is_numeric_field(field["name"])
+                text = ocr_text(vision_client, crop, numeric=numeric)
+                suggestions[field["name"]] = clean_number(text) if numeric else text
             except Exception as e:
                 suggestions[field["name"]] = ""
                 _warn(warn, f"「{field['name']}」辨識失敗：{e}")
