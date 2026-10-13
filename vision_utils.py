@@ -58,17 +58,21 @@ def prepare_digit_image(pil_image: Image.Image, target_h: int = 160, pad_ratio: 
     import cv2
     gray = np.array(remove_table_lines(pil_image).convert("L"))
     H, W = gray.shape
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(((gray < 160) * 255).astype(np.uint8), 8)
+    ink = ((gray < 160) * 255).astype(np.uint8)
+    # 掃描後筆畫常斷成一段一段(例如「9」的直筆變虛線)，先稍微加粗再分區塊，斷掉的筆畫才會算同一個字
+    merged = cv2.dilate(ink, np.ones((5, 5), np.uint8))
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(merged, 8)
     keep = np.zeros_like(gray, dtype=bool)
     for i in range(1, n):
         x, y, w, h, area = stats[i]
-        if area < 20:                                   # 掃描雜點
+        if area < 60:                                   # 掃描雜點(加粗後的面積)
             continue
-        thin = min(w, h) <= 5
+        thin = min(w, h) <= 9                           # 加粗後細線約 5~9px 寬
         at_edge = x <= 3 or y <= 3 or x + w >= W - 3 or y + h >= H - 3
         if thin and (at_edge or w >= W * 0.5 or h >= H * 0.6):   # 沒塗乾淨的框線殘段
             continue
         keep |= labels == i
+    keep &= ink > 0
     ys, xs = np.where(keep)
     if len(xs) < 15:
         return None
@@ -76,6 +80,9 @@ def prepare_digit_image(pil_image: Image.Image, target_h: int = 160, pad_ratio: 
     glyph = Image.fromarray(np.where(keep, gray, 255).astype(np.uint8)[y0:y1, x0:x1])
     scale = target_h / max(1, glyph.height)
     glyph = glyph.resize((max(1, int(glyph.width * scale)), target_h), Image.LANCZOS)
+    # 筆畫加粗：把掃描斷開的小縫補起來，細筆跡也比較好認
+    from PIL import ImageFilter
+    glyph = glyph.filter(ImageFilter.MinFilter(7))
     pad = int(target_h * pad_ratio)
     canvas = Image.new("L", (glyph.width + 2 * pad, glyph.height + 2 * pad), 255)
     canvas.paste(glyph, (pad, pad))
@@ -108,10 +115,14 @@ def ocr_text(vision_client, pil_image: Image.Image, numeric: bool = False) -> st
         digit_img = prepare_digit_image(pil_image)
         if digit_img is None:
             return ""
+        first = ""
         for document in (True, False):
             text = _vision_text(vision_client, digit_img, ["en"], document=document)
             if any(c.isdigit() for c in text):
                 return text
+            first = first or text
+        if first:
+            return first    # 例如把「9」讀成「q」，交給 clean_number 換回數字
     return _vision_text(vision_client, remove_table_lines(pil_image), ["zh-TW", "zh"])
 
 

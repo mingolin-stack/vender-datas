@@ -79,13 +79,14 @@ def check_eval_record(values: dict):
 
 
 NUMERIC_SUFFIXES = ("_評分", "_得分", "_加分")
-_DIGIT_FIX = str.maketrans({"O": "0", "o": "0", "〇": "0", "Ｏ": "0", "l": "1", "I": "1", "|": "1", "｜": "1", "丨": "1",
+_DIGIT_FIX = str.maketrans({"O": "0", "o": "0", "〇": "0", "Ｏ": "0", "D": "0", "l": "1", "I": "1", "|": "1", "｜": "1", "丨": "1",
+                            "q": "9", "g": "9", "Z": "2", "z": "2", "S": "5", "s": "5", "b": "6", "B": "8", "T": "7", "ㄱ": "7",
                             **{chr(0xFF10 + i): str(i) for i in range(10)}, "．": "."})
 
 
 def clean_number(text: str) -> str:
     """
-    分數欄位只會是數字：把 OCR 常見的誤認(O→0、l/I/|→1、全形數字)換回來，去掉空白和雜訊。
+    分數欄位只會是數字：把 OCR 常見的誤認(O→0、l/I/|→1、q/g→9、S→5、Z→2、全形數字)換回來，去掉空白和雜訊。
     清完沒有任何數字就回傳原文，讓人工核對時看得到 OCR 原本讀到什麼。
     """
     fixed = "".join(c for c in text.translate(_DIGIT_FIX) if c.isdigit() or c == ".").strip(".")
@@ -154,7 +155,8 @@ def deskew_page(page_img, max_angle=2.0):
     angle = best_angle
     if abs(angle) < 0.05:
         return page_img
-    return page_img.rotate(angle, resample=Image.BICUBIC, fillcolor=(255, 255, 255))
+    # 用 NEAREST 旋轉：細格線不會被內插糊成淺灰色而在之後的比對中斷掉
+    return page_img.rotate(angle, resample=Image.NEAREST, fillcolor=(255, 255, 255))
 
 
 def pick_template_version(template, page_images):
@@ -168,7 +170,16 @@ def pick_template_version(template, page_images):
         if not rule:
             continue
         idx = rule.get("page", 1) - 1
-        if idx < len(page_images) and _has_long_hline(page_images[idx], rule["y_range"], rule.get("min_width_frac", 0.5)):
+        if idx >= len(page_images):
+            continue
+        y_range = rule["y_range"]
+        if rule.get("page_top_line") is not None:
+            # 先扣掉整頁上下位移，舊版評分表底線往下移時才不會被誤認成 V1.1 的 e1 加分表
+            import numpy as np
+            from auto_align import _binary, page_y_offset
+            dy = page_y_offset(_binary(np.array(page_images[idx].convert("L"))), rule)
+            y_range = [y_range[0] + dy, y_range[1] + dy]
+        if _has_long_hline(page_images[idx], y_range, rule.get("min_width_frac", 0.5)):
             return load_template(os.path.join(BASE_DIR, ver["template"]))
     return template
 

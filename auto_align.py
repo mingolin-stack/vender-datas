@@ -83,7 +83,7 @@ def find_strong_hline(binary, x_range, expected_y, search_radius=130, backward=N
     return lo + int(best)
 
 
-def find_strong_vline(binary, y_range, expected_x, search_radius=45, prefer_near=False):
+def find_strong_vline(binary, y_range, expected_x, search_radius=45, prefer_near=False, outermost=None):
     """
     在 expected_x 附近 ±search_radius 範圍內，找出最像「一條直線」的位置。
 
@@ -91,6 +91,10 @@ def find_strong_vline(binary, y_range, expected_x, search_radius=45, prefer_near
     挑離預期位置最近的一條。不同掃描檔的縮放可能差 2~3%，表格右框會差到 30~40px，
     搜尋範圍要開大才找得到；開大後內部欄線也會進到範圍裡，用「最近」才不會鎖錯線。
     同時容許掃描稍微歪斜(直線先左右加粗再比對)。
+
+    outermost="left"/"right"：找表格外框用。搜尋範圍內「夠強」的線裡，取最左/最右那一條，
+    而不是最近的一條。整頁左右位移 20~30px 時，外框跟第一條內部欄線可能離預期位置一樣近，
+    但外框外面只有頁邊空白，取最外側那條一定是外框。
     """
     y0, y1 = y_range
     w = binary.shape[1]
@@ -111,6 +115,15 @@ def find_strong_vline(binary, y_range, expected_x, search_radius=45, prefer_near
     if not prefer_near:
         return lo + int(np.argmax(sums))
     candidates = np.where(sums >= sums.max() * 0.5)[0]
+    if outermost in ("left", "right"):
+        # 取最外側那一段連續的候選(同一條線加粗後的寬度)，回傳這一段的中心
+        idx = list(candidates) if outermost == "left" else list(candidates[::-1])
+        run = [idx[0]]
+        for c in idx[1:]:
+            if abs(c - run[-1]) > 1:
+                break
+            run.append(c)
+        return lo + int(round((run[0] + run[-1]) / 2))
     return lo + int(candidates[np.argmin(np.abs(lo + candidates - expected_x))])
 
 
@@ -259,6 +272,14 @@ def page_y_offset(binary, zone, min_width_frac=0.5):
     return int(rows[0]) + 5 - template_y   # +5：扣掉上下加粗時多出來的半個核心
 
 
+def _scale_slack(zone, distance):
+    """
+    有設定 page_top_line 時，整頁位移已經扣掉了，剩下的誤差主要來自縮放(掃描檔大小差 2~4%)，
+    離頁首越遠誤差越大，所以搜尋半徑依距離加寬 4%。沒有設定就不加寬(維持原本行為)。
+    """
+    return int(abs(distance) * 0.04) if zone.get("page_top_line") is not None else 0
+
+
 def compute_row_sequence(pil_image, zone, ocr_y_seed=None):
     """
     針對「一整排列高可能不規則」的表格(例如評分表某些列因為換行文字而變高、
@@ -298,7 +319,8 @@ def compute_row_sequence(pil_image, zone, ocr_y_seed=None):
         content_check_x = zone.get("content_check_x_range")
         content_check_x = tuple(content_check_x) if content_check_x else None
         prev_real_y = find_first_anchor_with_content_check(
-            binary, x_range, template_ys[0] + page_y_offset(binary, zone), next_gap=first_gap, search_radius=y_search_first,
+            binary, x_range, template_ys[0] + page_y_offset(binary, zone), next_gap=first_gap,
+            search_radius=y_search_first + _scale_slack(zone, template_ys[0] - zone.get("page_top_line", 0)),
             content_check_x_range=content_check_x,
         )
     y_map[template_ys[0]] = prev_real_y
@@ -330,8 +352,8 @@ def compute_row_sequence(pil_image, zone, ocr_y_seed=None):
 
     x_search = zone.get("x_search", 30)
     x_near = zone.get("x_prefer_near", False)
-    real_left = find_strong_vline(binary, (y_map[template_ys[0]], y_map[template_ys[-1]]), zone["anchor_left"], search_radius=x_search, prefer_near=x_near)
-    real_right = find_strong_vline(binary, (y_map[template_ys[0]], y_map[template_ys[-1]]), zone["anchor_right"], search_radius=x_search, prefer_near=x_near)
+    real_left = find_strong_vline(binary, (y_map[template_ys[0]], y_map[template_ys[-1]]), zone["anchor_left"], search_radius=x_search, prefer_near=x_near, outermost="left" if x_near else None)
+    real_right = find_strong_vline(binary, (y_map[template_ys[0]], y_map[template_ys[-1]]), zone["anchor_right"], search_radius=x_search, prefer_near=x_near, outermost="right" if x_near else None)
     x_span = zone["anchor_right"] - zone["anchor_left"]
     x_scale = (real_right - real_left) / x_span if x_span else 1.0
 
@@ -389,11 +411,17 @@ def compute_zone_transform(pil_image, zone):
     x_search = zone.get("x_search", 35)
 
     dy = page_y_offset(binary, zone)
-    real_top = find_strong_hline(binary, (ax0, ax1), ay0 + dy, search_radius=y_search)
-    real_bottom = find_strong_hline(binary, (ax0, ax1), ay1 + dy, search_radius=y_search)
+    real_top = find_strong_hline(binary, (ax0, ax1), ay0 + dy,
+                                 search_radius=y_search + _scale_slack(zone, ay0 - zone.get("page_top_line", 0)))
+    if zone.get("page_top_line") is not None:
+        # 底線從實際找到的頂線往下推算，誤差只剩區塊本身高度的縮放
+        real_bottom = find_strong_hline(binary, (ax0, ax1), real_top + (ay1 - ay0),
+                                        search_radius=y_search + _scale_slack(zone, ay1 - ay0))
+    else:
+        real_bottom = find_strong_hline(binary, (ax0, ax1), ay1 + dy, search_radius=y_search)
     x_near = zone.get("x_prefer_near", False)
-    real_left = find_strong_vline(binary, (real_top, real_bottom), ax0, search_radius=x_search, prefer_near=x_near)
-    real_right = find_strong_vline(binary, (real_top, real_bottom), ax1, search_radius=x_search, prefer_near=x_near)
+    real_left = find_strong_vline(binary, (real_top, real_bottom), ax0, search_radius=x_search, prefer_near=x_near, outermost="left" if x_near else None)
+    real_right = find_strong_vline(binary, (real_top, real_bottom), ax1, search_radius=x_search, prefer_near=x_near, outermost="right" if x_near else None)
 
     y_span = ay1 - ay0
     x_span = ax1 - ax0
