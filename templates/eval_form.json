@@ -6,6 +6,22 @@
     "width": 1653,
     "height": 2339
   },
+  "deskew": true,
+  "versions": [
+    {
+      "name": "V1.1",
+      "template": "templates/eval_form_v1_1.json",
+      "note": "V1.1 第 1 頁評分表下方多了 e1 加分表，舊版那裡是空白",
+      "detect_hline": {
+        "page": 1,
+        "y_range": [
+          1950,
+          2250
+        ],
+        "min_width_frac": 0.5
+      }
+    }
+  ],
   "zones": {
     "header_info": {
       "page": 1,
@@ -53,10 +69,6 @@
       ],
       "y_search_first": 60,
       "y_search_step": 30,
-      "content_check_x_range": [
-        420,
-        680
-      ],
       "x_search": 70,
       "x_prefer_near": true
     },
