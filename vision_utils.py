@@ -130,9 +130,17 @@ def ocr_digits_batch(vision_client, pil_images, glyph_h: int = 80, cols: int = 6
                         cy = sum(p.y for p in v) / len(v)
                         idx = int(cy // slot_h) * cols + int(cx // slot_w)
                         if 0 <= idx < len(glyphs) and glyphs[idx] is not None:
-                            found.setdefault(idx, []).append((cx, symbol.text))
+                            found.setdefault(idx, []).append((cx, cy, symbol.text))
+    # Vision 有時會把同一個字在兩個重疊的區塊各回傳一次（10 變 1100、6 變 66），
+    # 同一格裡中心幾乎重疊的字只留一個。
+    near = glyph_h * 0.25
     for idx, chars in found.items():
-        results[idx] = "".join(t for _, t in sorted(chars))
+        kept = []
+        for cx, cy, t in sorted(chars):
+            if any(abs(cx - kx) < near and abs(cy - ky) < near for kx, ky, _ in kept):
+                continue
+            kept.append((cx, cy, t))
+        results[idx] = "".join(t for _, _, t in kept)
     return results
 
 

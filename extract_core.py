@@ -80,7 +80,7 @@ def check_eval_record(values: dict):
 
 NUMERIC_SUFFIXES = ("_評分", "_得分", "_加分")
 _DIGIT_FIX = str.maketrans({"O": "0", "o": "0", "〇": "0", "Ｏ": "0", "D": "0", "l": "1", "I": "1", "|": "1", "｜": "1", "丨": "1",
-                            "q": "9", "g": "9", "Z": "2", "z": "2", "S": "5", "s": "5", "b": "6", "B": "8", "T": "7", "ㄱ": "7",
+                            "q": "9", "g": "9", "Z": "2", "z": "2", "S": "5", "s": "5", "b": "6", "B": "8", "T": "7", "ㄱ": "7", "$": "8", "&": "8",
                             **{chr(0xFF10 + i): str(i) for i in range(10)}, "．": "."})
 
 
@@ -340,6 +340,15 @@ def run_extraction(page_images, template, vision_client, warn=None):
     return suggestions, crops, boxes_used
 
 
+def _plausible_score(name: str, value: str) -> bool:
+    """每個項目的評分/得分/加分都不會超過 10，評核總分不會超過 100；超過就是讀錯(例如 10 讀成 1100)。"""
+    try:
+        v = float(value)
+    except ValueError:
+        return False
+    return v <= (100 if name == "評核總分" else 10)
+
+
 def _ocr_numeric_fields(vision_client, numeric_crops, suggestions, warn=None):
     """分數欄位：整張表一次批次辨識；批次沒讀到數字的格子，再單格放大辨識一次。"""
     if not numeric_crops:
@@ -351,11 +360,13 @@ def _ocr_numeric_fields(vision_client, numeric_crops, suggestions, warn=None):
         batch = [""] * len(numeric_crops)
     for (name, crop), text in zip(numeric_crops, batch):
         value = clean_number(text) if text else ""
-        if not any(c.isdigit() for c in value):
+        if not any(c.isdigit() for c in value) or not _plausible_score(name, value):
             try:
                 single = ocr_text(vision_client, crop, numeric=True)
-                if single:
-                    value = clean_number(single)
+                single = clean_number(single) if single else ""
+                if any(c.isdigit() for c in single) and (
+                        _plausible_score(name, single) or not any(c.isdigit() for c in value)):
+                    value = single
             except Exception as e:
                 _warn(warn, f"「{name}」辨識失敗：{e}")
         suggestions[name] = value
