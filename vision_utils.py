@@ -62,7 +62,7 @@ def prepare_digit_image(pil_image: Image.Image, target_h: int = 160, pad_ratio: 
     # 掃描後筆畫常斷成一段一段(例如「9」的直筆變虛線)，先稍微加粗再分區塊，斷掉的筆畫才會算同一個字
     merged = cv2.dilate(ink, np.ones((5, 5), np.uint8))
     n, labels, stats, _ = cv2.connectedComponentsWithStats(merged, 8)
-    keep = np.zeros_like(gray, dtype=bool)
+    cand = []
     for i in range(1, n):
         x, y, w, h, area = stats[i]
         if area < 60:                                   # 掃描雜點(加粗後的面積)
@@ -71,7 +71,30 @@ def prepare_digit_image(pil_image: Image.Image, target_h: int = 160, pad_ratio: 
         at_edge = x <= 3 or y <= 3 or x + w >= W - 3 or y + h >= H - 3
         if thin and (at_edge or w >= W * 0.5 or h >= H * 0.6):   # 沒塗乾淨的框線殘段
             continue
-        keep |= labels == i
+        cand.append((i, area))
+    keep = np.zeros_like(gray, dtype=bool)
+    if cand:
+        # 從最大的那塊筆跡出發，只收夠大、而且跟它並排(同一行高度)或緊貼著它的筆跡。
+        # 虛線框線、格子上下的髒點不算：它們會把裁切範圍撐大，字反而被縮小、甚至被當成同一個字。
+        biggest = max(a for _, a in cand)
+        main = max(cand, key=lambda c: c[1])[0]
+        bx, by, bw, bh, _ = stats[main]
+        box = [bx, by, bx + bw, by + bh]
+        chosen, changed = {main}, True
+        while changed:
+            changed = False
+            for i, area in cand:
+                if i in chosen:
+                    continue
+                x, y, w, h, _ = stats[i]
+                v_overlap = min(y + h, box[3]) - max(y, box[1])
+                gap = max(box[0] - (x + w), x - box[2], box[1] - (y + h), y - box[3])
+                if area >= biggest * 0.2 and (v_overlap >= h * 0.3 or gap <= 6):
+                    chosen.add(i)
+                    box = [min(box[0], x), min(box[1], y), max(box[2], x + w), max(box[3], y + h)]
+                    changed = True
+        for i in chosen:
+            keep |= labels == i
     keep &= ink > 0
     ys, xs = np.where(keep)
     if len(xs) < 15:
@@ -89,6 +112,16 @@ def prepare_digit_image(pil_image: Image.Image, target_h: int = 160, pad_ratio: 
     canvas = Image.new("L", (glyph.width + 2 * pad, glyph.height + 2 * pad), 255)
     canvas.paste(glyph, (pad, pad))
     return canvas.convert("RGB")
+
+
+def _overlap(a, b) -> float:
+    """兩個框 (x0, y0, x1, y1) 的交集占較小那個框的比例。"""
+    w = min(a[2], b[2]) - max(a[0], b[0])
+    h = min(a[3], b[3]) - max(a[1], b[1])
+    if w <= 0 or h <= 0:
+        return 0.0
+    small = min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
+    return w * h / max(1, small)
 
 
 def ocr_digits_batch(vision_client, pil_images, glyph_h: int = 80, cols: int = 6) -> list:
@@ -130,17 +163,17 @@ def ocr_digits_batch(vision_client, pil_images, glyph_h: int = 80, cols: int = 6
                         cy = sum(p.y for p in v) / len(v)
                         idx = int(cy // slot_h) * cols + int(cx // slot_w)
                         if 0 <= idx < len(glyphs) and glyphs[idx] is not None:
-                            found.setdefault(idx, []).append((cx, cy, symbol.text))
-    # Vision 有時會把同一個字在兩個重疊的區塊各回傳一次（10 變 1100、6 變 66），
-    # 同一格裡中心幾乎重疊的字只留一個。
-    near = glyph_h * 0.25
+                            box = (min(p.x for p in v), min(p.y for p in v), max(p.x for p in v), max(p.y for p in v))
+                            found.setdefault(idx, []).append((box, symbol.text))
+    # Vision 有時會把同一個字在兩個重疊的區塊各回傳一次（10 變 1100、6 變 66）：
+    # 同一格裡「同一個字、框幾乎重疊」的只留一個。不同的字(1 和 0)不管多近都保留。
     for idx, chars in found.items():
         kept = []
-        for cx, cy, t in sorted(chars):
-            if any(abs(cx - kx) < near and abs(cy - ky) < near for kx, ky, _ in kept):
+        for box, t in sorted(chars):
+            if any(t == kt and _overlap(box, kb) > 0.5 for kb, kt in kept):
                 continue
-            kept.append((cx, cy, t))
-        results[idx] = "".join(t for _, _, t in kept)
+            kept.append((box, t))
+        results[idx] = "".join(t for _, t in kept)
     return results
 
 
