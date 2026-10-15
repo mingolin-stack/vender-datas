@@ -14,7 +14,7 @@ from io import BytesIO
 
 from PIL import Image
 
-from vision_utils import crop_field, ocr_text, is_checked, find_label_boxes
+from vision_utils import crop_field, ocr_text, ocr_digits_batch, is_checked, find_label_boxes
 from auto_align import (compute_zone_transform, remap_box, compute_row_sequence, remap_box_row_sequence,
                         refine_column_divider, ocr_labels_to_line_seed, snap_cell_x, remap_x_row_local)
 
@@ -289,6 +289,7 @@ def run_extraction(page_images, template, vision_client, warn=None):
     crops = {}
     boxes_used = {}
     zone_transform_cache = {}
+    numeric_crops = []
     for field in template["fields"]:
         if field["type"] == "text":
             img = get_field_page_image(page_images, field)
@@ -296,10 +297,13 @@ def run_extraction(page_images, template, vision_client, warn=None):
             crop = crop_field(img, box)
             crops[field["name"]] = crop
             boxes_used[field["name"]] = box
+            if is_numeric_field(field["name"]):
+                # 分數欄位先保留位置，等整張表的分數格收齊後一起辨識(見下方 ocr_digits_batch)
+                suggestions[field["name"]] = ""
+                numeric_crops.append((field["name"], crop))
+                continue
             try:
-                numeric = is_numeric_field(field["name"])
-                text = ocr_text(vision_client, crop, numeric=numeric)
-                suggestions[field["name"]] = clean_number(text) if numeric else text
+                suggestions[field["name"]] = ocr_text(vision_client, crop)
             except Exception as e:
                 suggestions[field["name"]] = ""
                 _warn(warn, f"「{field['name']}」辨識失敗：{e}")
@@ -332,8 +336,29 @@ def run_extraction(page_images, template, vision_client, warn=None):
             suggestions[field["name"]] = best_label or ""
             if len(hit_labels) > 1:
                 _warn(warn, f"「{field['name']}」勾了不只一個：{'、'.join(hit_labels)}（先帶入最明顯的「{best_label}」，請核對）")
+    _ocr_numeric_fields(vision_client, numeric_crops, suggestions, warn)
     return suggestions, crops, boxes_used
 
+
+def _ocr_numeric_fields(vision_client, numeric_crops, suggestions, warn=None):
+    """分數欄位：整張表一次批次辨識；批次沒讀到數字的格子，再單格放大辨識一次。"""
+    if not numeric_crops:
+        return
+    try:
+        batch = ocr_digits_batch(vision_client, [crop for _, crop in numeric_crops])
+    except Exception as e:
+        _warn(warn, f"分數欄位批次辨識失敗，改成逐格辨識：{e}")
+        batch = [""] * len(numeric_crops)
+    for (name, crop), text in zip(numeric_crops, batch):
+        value = clean_number(text) if text else ""
+        if not any(c.isdigit() for c in value):
+            try:
+                single = ocr_text(vision_client, crop, numeric=True)
+                if single:
+                    value = clean_number(single)
+            except Exception as e:
+                _warn(warn, f"「{name}」辨識失敗：{e}")
+        suggestions[name] = value
 
 
 def file_to_images(file_bytes: bytes, filename: str, template: dict = None):
