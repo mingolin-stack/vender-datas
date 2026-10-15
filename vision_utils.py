@@ -82,11 +82,58 @@ def prepare_digit_image(pil_image: Image.Image, target_h: int = 160, pad_ratio: 
     glyph = glyph.resize((max(1, int(glyph.width * scale)), target_h), Image.LANCZOS)
     # 筆畫加粗：把掃描斷開的小縫補起來，細筆跡也比較好認
     from PIL import ImageFilter
-    glyph = glyph.filter(ImageFilter.MinFilter(7))
+    glyph = glyph.filter(ImageFilter.MinFilter(max(3, (target_h // 25) | 1)))   # 160px 高用 7、80px 高用 3
     pad = int(target_h * pad_ratio)
+    if pad <= 0:
+        return glyph.convert("RGB")
     canvas = Image.new("L", (glyph.width + 2 * pad, glyph.height + 2 * pad), 255)
     canvas.paste(glyph, (pad, pad))
     return canvas.convert("RGB")
+
+
+def ocr_digits_batch(vision_client, pil_images, glyph_h: int = 80, cols: int = 6) -> list:
+    """
+    一次辨識整張表所有分數格：把每格的手寫數字排成一張「數字表」送 Vision，
+    再依每個字的位置分回各格。Vision 對「一張圖只有一個孤零零的字」很容易整個不回傳，
+    但一整頁排好的數字它讀得很穩；也從每格一次 API 呼叫變成整張表一次。
+    回傳跟輸入同長度的字串清單；格子裡沒有筆跡的回傳 ""。
+    """
+    glyphs = [prepare_digit_image(im, target_h=glyph_h, pad_ratio=0) for im in pil_images]
+    results = [""] * len(pil_images)
+    present = [g for g in glyphs if g is not None]
+    if not present:
+        return results
+    slot_w = max(g.width for g in present) + glyph_h * 2
+    slot_h = glyph_h * 2 + glyph_h // 2
+    rows = (len(glyphs) + cols - 1) // cols
+    canvas = Image.new("RGB", (slot_w * cols, slot_h * rows), (255, 255, 255))
+    for i, g in enumerate(glyphs):
+        if g is None:
+            continue
+        r, c = divmod(i, cols)
+        canvas.paste(g, (c * slot_w + (slot_w - g.width) // 2, r * slot_h + (slot_h - g.height) // 2))
+
+    image = vision.Image(content=image_to_bytes(canvas))
+    response = vision_client.document_text_detection(image=image, image_context={"language_hints": ["en"]})
+    if response.error.message:
+        raise RuntimeError(f"Vision API 錯誤: {response.error.message}")
+    if not response.full_text_annotation:
+        return results
+    found = {}   # 格子編號 -> [(x, 字)]
+    for page in response.full_text_annotation.pages:
+        for block in page.blocks:
+            for paragraph in block.paragraphs:
+                for word in paragraph.words:
+                    for symbol in word.symbols:
+                        v = symbol.bounding_box.vertices
+                        cx = sum(p.x for p in v) / len(v)
+                        cy = sum(p.y for p in v) / len(v)
+                        idx = int(cy // slot_h) * cols + int(cx // slot_w)
+                        if 0 <= idx < len(glyphs) and glyphs[idx] is not None:
+                            found.setdefault(idx, []).append((cx, symbol.text))
+    for idx, chars in found.items():
+        results[idx] = "".join(t for _, t in sorted(chars))
+    return results
 
 
 def _vision_text(vision_client, pil_image: Image.Image, hints, document=True) -> str:
