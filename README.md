@@ -24,6 +24,7 @@
 | `auto_align.py` | 供應商評核表專用：在每一頁實際掃描圖片上動態尋找格線、微調欄位座標，因應不同頁面掃描位置的落差 |
 | `templates/supplier_form.json` | 供應商資料表的欄位座標校正檔 |
 | `templates/eval_form.json` | 供應商評核表的欄位座標校正檔(2頁、44個欄位，含動態校正用的 zones 設定) |
+| `api.py`、`modules/` | 給供應商管理 App 呼叫的判讀 API(三個模組各一支) |
 | `requirements.txt` | 套件清單(新增了 `opencv-python-headless`，動態校正需要用到) |
 
 ## ⚠️ 目前的測試狀況
@@ -74,14 +75,36 @@ token_uri = "https://oauth2.googleapis.com/token"
 
 ## 判讀 API(給「供應商管理 App」呼叫)
 
-`api.py` 跟 Streamlit 共用同一套判讀核心 `extract_core.py`，修正一次兩邊同時生效。
+App 的三個區塊各對應一支判讀程式(`modules/`)，全部跟 Streamlit 共用判讀核心 `extract_core.py`，修正一次兩邊同時生效。
 
-| 端點 | 說明 |
-|---|---|
-| `GET /health` | 健康檢查 |
-| `POST /api/extract_vendor`、`POST /api/extract` | 上傳 `file`，`document_type` = `supplier_form`(資料表) / `supplier_evaluation`(評核表)；`quotation`(報價單)尚未支援 |
+| App 區塊 | 程式 | 端點 | 上傳文件 |
+|---|---|---|---|
+| 供應商資料主檔 | `modules/supplier_master.py` | `POST /api/supplier-master/extract` | 供應商資料表(1 頁) |
+| 供應商評核 | `modules/supplier_evaluation.py` | `POST /api/supplier-evaluation/extract` | 供應商評核表(2 頁，一個單位) |
+| 日常報價比價 | `modules/quotation.py` | `POST /api/quotation/extract` | 報價單(尚未上線，目前回 501) |
 
-回傳：`{success, document_type, normalized:{...}, fields:{原始欄位:值}, warnings:[...]}`。
+其他端點：`GET /health`(列出開啟的模組)、`GET /docs`(互動式 API 文件)、`GET /openapi.json`(OpenAPI 規格)。
+舊網址 `POST /api/extract`、`POST /api/extract_vendor` 仍可用，依 `document_type`(`supplier_form` / `supplier_evaluation` / `quotation`)分派到上面的模組。
+
+呼叫方式：`multipart/form-data`，欄位 `file` 放 PDF 或圖片；有設定 `VENDOR_API_KEY` 時要帶 `X-API-Key` 標頭。
+
+成功回傳：
+
+```json
+{
+  "success": true,
+  "api_version": "2026-10-16-api-v2",
+  "module": "supplier_master",
+  "document_type": "supplier_form",
+  "pages": 1,
+  "normalized": { "company_name_zh": "...", "tax_id": "...", "...": "..." },
+  "fields": { "公司全名(中文)": "...", "...": "..." },
+  "warnings": ["統一編號應為 8 碼，辨識結果為「1234567」"]
+}
+```
+
+失敗回傳：`{"success": false, "message": "錯誤說明", "detail": "錯誤說明"}`，HTTP 狀態碼 400(檔案問題)、401(API Key)、413(超過 20MB)、500(判讀失敗)、501(報價單尚未上線)。
+
 資料表的 `normalized` 用主 App 認得的英文 key(company_name_zh、tax_id…)；評核表的 `items` 中 `max_score`=評分(該項最高給分)、`score`=得分(實際分數)。
 
 ### 部署到 Cloud Run(沿用原本的服務名稱，網址不變)
@@ -95,3 +118,13 @@ gcloud run deploy vendor-data-api --source . --region asia-east1
 ```
 
 原本設定的環境變數(例如 `VENDOR_API_KEY`)會保留。Cloud Run 的服務帳戶需要有 Cloud Vision API 權限。
+
+預設一個服務開三個模組。如果想拆成三個獨立服務(各自的網址、各自擴充)，同一份程式碼部署三次，用 `ENABLED_MODULES` 指定各自要開的模組：
+
+```bash
+gcloud run deploy supplier-master-api     --source . --region asia-east1 --set-env-vars ENABLED_MODULES=supplier_master
+gcloud run deploy supplier-evaluation-api --source . --region asia-east1 --set-env-vars ENABLED_MODULES=supplier_evaluation
+gcloud run deploy quotation-api           --source . --region asia-east1 --set-env-vars ENABLED_MODULES=quotation
+```
+
+本機測試：`pip install -r requirements-api.txt pytest httpx && python -m pytest tests`
