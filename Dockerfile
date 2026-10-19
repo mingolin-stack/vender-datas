@@ -4,6 +4,7 @@ WORKDIR /app
 COPY requirements-api.txt .
 RUN pip install --no-cache-dir -r requirements-api.txt
 COPY api.py extract_core.py auto_align.py vision_utils.py ./
+COPY modules ./modules
 COPY templates ./templates
 ENV PORT=8080
 CMD exec uvicorn api:app --host 0.0.0.0 --port ${PORT}
