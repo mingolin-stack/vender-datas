@@ -61,14 +61,23 @@ def test_evaluation_needs_two_pages(client):
 
 
 QUOTE_TEXT = ["大成五金有限公司", "統一編號：53212345", "客戶：綠色收成股份有限公司", "報價單號：Q1015-03",
-              "報價日期：115/10/15", "未稅合計 12,000", "營業稅 600", "含稅總計 12,600"]
+              "報價日期：115/10/15", "1  不鏽鋼螺絲  M6x20  支  1,000  5  5,000",
+              "2  鍍鋅角鐵  40x40x3mm  支  20  350  7,000", "未稅合計 12,000", "營業稅 600", "含稅總計 12,600"]
+ITEMS = [("不鏽鋼螺絲", "M6x20", "支", 1000, 5, 5000), ("鍍鋅角鐵", "40x40x3mm", "支", 20, 350, 7000)]
+
+
+def item_tuples(body):
+    return [(i["name"], i["spec"], i["unit"], i["quantity"], i["unit_price"], i["amount"])
+            for i in body["normalized"]["items"]]
 
 
 def text_pdf(lines):
     doc = fitz.open()
     page = doc.new_page(width=595, height=842)
-    for i, line in enumerate(lines):
-        page.insert_text((50, 60 + i * 20), line, fontname="china-t", fontsize=11)
+    # 每格分開寫、而且整欄由右到左寫入，模擬 PDF 內部文字順序跟畫面不同的情況
+    cells = [(i, j, cell) for i, line in enumerate(lines) for j, cell in enumerate(line.split("  "))]
+    for i, j, cell in sorted(cells, key=lambda c: (-c[1], c[0])):
+        page.insert_text((40 + j * 75, 60 + i * 20), cell, fontname="china-t", fontsize=10)
     return doc.tobytes()
 
 
@@ -81,6 +90,7 @@ def test_quotation_text_pdf(client, monkeypatch):
     n = body["normalized"]
     assert (n["supplier_name"], n["tax_id"], n["quote_no"]) == ("大成五金有限公司", "53212345", "Q1015-03")
     assert (n["quote_date"], n["subtotal"], n["tax"], n["total"]) == ("2026-10-15", 12000, 600, 12600)
+    assert item_tuples(body) == ITEMS and body["warnings"] == []
 
 
 def test_quotation_scanned_uses_ocr(client, monkeypatch):
@@ -88,6 +98,24 @@ def test_quotation_scanned_uses_ocr(client, monkeypatch):
     monkeypatch.setattr(q, "ocr_page", lambda vc, img: "\n".join(QUOTE_TEXT))
     body = post(client, "/api/quotation/extract", 1).json()
     assert body["text_source"] == "ocr" and body["normalized"]["total"] == 12600
+
+
+def test_quotation_excel(client):
+    from io import BytesIO
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    for row in [["大成五金有限公司"], ["統一編號", "53212345"], ["報價日期", "2026/10/15"],
+                ["項次", "品名", "規格", "單位", "數量", "單價", "金額"],
+                [1, "不鏽鋼螺絲", "M6x20", "支", 1000, 5, 5000], [2, "鍍鋅角鐵", "40x40x3mm", "支", 20, 350, 7000],
+                ["未稅合計", 12000], ["營業稅", 600], ["含稅總計", 12600]]:
+        ws.append(row)
+    buf = BytesIO()
+    wb.save(buf)
+    r = client.post("/api/quotation/extract", files={"file": ("q.xlsx", buf.getvalue(), "application/octet-stream")})
+    body = r.json()
+    assert body["text_source"] == "excel" and body["normalized"]["total"] == 12600
+    assert item_tuples(body) == ITEMS
 
 
 @pytest.mark.parametrize("url", ["/api/extract", "/api/extract_vendor"])
