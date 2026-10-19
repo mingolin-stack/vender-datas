@@ -7,7 +7,7 @@
   GET  /health                              健康檢查(列出這個服務有開的模組)
   POST /api/supplier-master/extract         模組一 供應商資料主檔：供應商資料表
   POST /api/supplier-evaluation/extract     模組二 供應商評核：供應商評核表
-  POST /api/quotation/extract               模組三 日常報價比價：報價單(尚未上線，回 501)
+  POST /api/quotation/extract               模組三 日常報價比價：報價單(第一版：表頭與金額，品項明細待樣本)
   POST /api/extract、/api/extract_vendor    舊網址，用 document_type 分派到上面三個模組(相容用)
   GET  /docs、/openapi.json                 自動產生的 API 文件 / OpenAPI 規格
 

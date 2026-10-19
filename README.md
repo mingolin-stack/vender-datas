@@ -81,7 +81,7 @@ App 的三個區塊各對應一支判讀程式(`modules/`)，全部跟 Streamlit
 |---|---|---|---|
 | 供應商資料主檔 | `modules/supplier_master.py` | `POST /api/supplier-master/extract` | 供應商資料表(1 頁) |
 | 供應商評核 | `modules/supplier_evaluation.py` | `POST /api/supplier-evaluation/extract` | 供應商評核表(2 頁，一個單位) |
-| 日常報價比價 | `modules/quotation.py` | `POST /api/quotation/extract` | 報價單(尚未上線，目前回 501) |
+| 日常報價比價 | `modules/quotation.py` | `POST /api/quotation/extract` | 報價單(第一版：讀表頭與金額，品項明細等樣本後補) |
 
 其他端點：`GET /health`(列出開啟的模組)、`GET /docs`(互動式 API 文件)、`GET /openapi.json`(OpenAPI 規格)。
 舊網址 `POST /api/extract`、`POST /api/extract_vendor` 仍可用，依 `document_type`(`supplier_form` / `supplier_evaluation` / `quotation`)分派到上面的模組。
@@ -103,7 +103,9 @@ App 的三個區塊各對應一支判讀程式(`modules/`)，全部跟 Streamlit
 }
 ```
 
-失敗回傳：`{"success": false, "message": "錯誤說明", "detail": "錯誤說明"}`，HTTP 狀態碼 400(檔案問題)、401(API Key)、413(超過 20MB)、500(判讀失敗)、501(報價單尚未上線)。
+失敗回傳：`{"success": false, "message": "錯誤說明", "detail": "錯誤說明"}`，HTTP 狀態碼 400(檔案問題)、401(API Key)、413(超過 20MB)、500(判讀失敗)。
+
+報價單的 `normalized`：supplier_name、tax_id、quote_no、quote_date、valid_until、currency、tax_included、subtotal、tax、total，`items`(品項明細)目前是空陣列；另外回傳 `raw_text`(整份文字)與 `text_source`(`pdf_text` 電子檔直接讀字 / `ocr` 掃描檔送 Vision)。
 
 資料表的 `normalized` 用主 App 認得的英文 key(company_name_zh、tax_id…)；評核表的 `items` 中 `max_score`=評分(該項最高給分)、`score`=得分(實際分數)。
 

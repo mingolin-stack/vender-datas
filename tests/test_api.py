@@ -60,9 +60,34 @@ def test_evaluation_needs_two_pages(client):
     assert r.status_code == 400 and r.json()["success"] is False and "2 頁" in r.json()["message"]
 
 
-def test_quotation_not_ready(client):
-    r = post(client, "/api/quotation/extract", 1)
-    assert r.status_code == 501 and r.json()["success"] is False
+QUOTE_TEXT = ["大成五金有限公司", "統一編號：53212345", "客戶：綠色收成股份有限公司", "報價單號：Q1015-03",
+              "報價日期：115/10/15", "未稅合計 12,000", "營業稅 600", "含稅總計 12,600"]
+
+
+def text_pdf(lines):
+    doc = fitz.open()
+    page = doc.new_page(width=595, height=842)
+    for i, line in enumerate(lines):
+        page.insert_text((50, 60 + i * 20), line, fontname="china-t", fontsize=11)
+    return doc.tobytes()
+
+
+def test_quotation_text_pdf(client, monkeypatch):
+    import modules.quotation as q
+    monkeypatch.setattr(q, "ocr_page", lambda *a: pytest.fail("電子檔 PDF 不應呼叫 Vision"))
+    r = client.post("/api/quotation/extract", files={"file": ("q.pdf", text_pdf(QUOTE_TEXT), "application/pdf")})
+    body = r.json()
+    assert r.status_code == 200 and body["module"] == "quotation" and body["text_source"] == "pdf_text"
+    n = body["normalized"]
+    assert (n["supplier_name"], n["tax_id"], n["quote_no"]) == ("大成五金有限公司", "53212345", "Q1015-03")
+    assert (n["quote_date"], n["subtotal"], n["tax"], n["total"]) == ("2026-10-15", 12000, 600, 12600)
+
+
+def test_quotation_scanned_uses_ocr(client, monkeypatch):
+    import modules.quotation as q
+    monkeypatch.setattr(q, "ocr_page", lambda vc, img: "\n".join(QUOTE_TEXT))
+    body = post(client, "/api/quotation/extract", 1).json()
+    assert body["text_source"] == "ocr" and body["normalized"]["total"] == 12600
 
 
 @pytest.mark.parametrize("url", ["/api/extract", "/api/extract_vendor"])
